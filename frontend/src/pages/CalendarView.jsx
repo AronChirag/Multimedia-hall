@@ -36,7 +36,12 @@ const CalendarView = () => {
   const [bookingsByDate, setBookingsByDate] = useState({});
 
   useEffect(() => {
-    fetchBookings();
+    const now = new Date();
+
+    const start = new Date(now.getFullYear(), now.getMonth(), 1);
+    const end = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+
+    fetchBookings(start.toISOString(), end.toISOString());
   }, []);
 
   const fetchBookings = async (startDate, endDate) => {
