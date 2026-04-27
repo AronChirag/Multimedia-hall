@@ -9,10 +9,21 @@ import './Reports.css';
 const Reports = () => {
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
-  const [filters, setFilters] = useState({ college: '', status: '', from: '', to: '' });
-  const [loading, setLoading] = useState({ pdf: false, excel: false });
 
-  const handleChange = (e) => setFilters({ ...filters, [e.target.name]: e.target.value });
+  const [filters, setFilters] = useState({
+    college: '',
+    status: '',
+    from: '',
+    to: '',
+  });
+
+  const [loading, setLoading] = useState({
+    pdf: false,
+    excel: false,
+  });
+
+  const handleChange = (e) =>
+    setFilters({ ...filters, [e.target.name]: e.target.value });
 
   const triggerDownload = (blob, filename) => {
     const url = URL.createObjectURL(blob);
@@ -29,10 +40,7 @@ const Reports = () => {
     try {
       const params = isAdmin
         ? filters
-        : {
-            from: filters.from,
-            to: filters.to,
-          };
+        : { from: filters.from, to: filters.to };
 
       const res =
         type === 'pdf'
@@ -41,20 +49,14 @@ const Reports = () => {
 
       triggerDownload(
         res.data,
-        type === 'pdf' ? 'bookings_report.pdf' : 'bookings_report.xlsx'
+        type === 'pdf'
+          ? 'bookings_report.pdf'
+          : 'bookings_report.xlsx'
       );
 
-      toast.success(
-        type === 'pdf'
-          ? 'PDF downloaded!'
-          : 'Excel file downloaded!'
-      );
+      toast.success(type === 'pdf' ? 'PDF downloaded!' : 'Excel downloaded!');
     } catch {
-      toast.error(
-        type === 'pdf'
-          ? 'Failed to generate PDF.'
-          : 'Failed to generate Excel file.'
-      );
+      toast.error(type === 'pdf' ? 'PDF failed.' : 'Excel failed.');
     } finally {
       setLoading((prev) => ({ ...prev, [type]: false }));
     }
@@ -64,7 +66,10 @@ const Reports = () => {
     <div>
       <Navbar />
       <div className="reports-page">
-        <PageBackButton fallback={isAdmin ? '/admin/dashboard' : '/user/dashboard'} />
+        <PageBackButton
+          fallback={isAdmin ? '/admin/dashboard' : '/user/dashboard'}
+        />
+
         <div className="page-header">
           <h2>📊 Reports</h2>
           <p>Export booking data as PDF or Excel.</p>
@@ -73,21 +78,33 @@ const Reports = () => {
         <div className="reports-card">
           <div className="filters-section">
             <h3>{isAdmin ? 'Filters' : 'Date Range'}</h3>
+
             <div className="filters-grid">
               {isAdmin && (
                 <>
                   <div className="form-group">
                     <label>College</label>
-                    <select name="college" value={filters.college} onChange={handleChange}>
+                    <select
+                      name="college"
+                      value={filters.college}
+                      onChange={handleChange}
+                      className="input"
+                    >
                       <option value="">All Colleges</option>
                       <option>College A</option>
                       <option>College B</option>
                       <option>College C</option>
                     </select>
                   </div>
+
                   <div className="form-group">
                     <label>Status</label>
-                    <select name="status" value={filters.status} onChange={handleChange}>
+                    <select
+                      name="status"
+                      value={filters.status}
+                      onChange={handleChange}
+                      className="input"
+                    >
                       <option value="">All Statuses</option>
                       <option value="pending">Pending</option>
                       <option value="approved">Approved</option>
@@ -96,22 +113,45 @@ const Reports = () => {
                   </div>
                 </>
               )}
+
               <div className="form-group">
                 <label>From Date</label>
-                <input type="date" name="from" value={filters.from} onChange={handleChange} />
+                <input
+                  type="date"
+                  name="from"
+                  value={filters.from}
+                  onChange={handleChange}
+                  className="input"
+                />
               </div>
+
               <div className="form-group">
                 <label>To Date</label>
-                <input type="date" name="to" value={filters.to} onChange={handleChange} />
+                <input
+                  type="date"
+                  name="to"
+                  value={filters.to}
+                  onChange={handleChange}
+                  className="input"
+                />
               </div>
             </div>
           </div>
 
           <div className="export-buttons">
-            <button className="export-btn pdf" onClick={() => handleDownload('pdf')} disabled={loading.pdf}>
+            <button
+              className="btn btn-accent"
+              onClick={() => handleDownload('pdf')}
+              disabled={loading.pdf}
+            >
               {loading.pdf ? 'Generating...' : '📄 Download PDF'}
             </button>
-            <button className="export-btn excel" onClick={() => handleDownload('excel')} disabled={loading.excel}>
+
+            <button
+              className="btn btn-accent"
+              onClick={() => handleDownload('excel')}
+              disabled={loading.excel}
+            >
               {loading.excel ? 'Generating...' : '📊 Download Excel'}
             </button>
           </div>

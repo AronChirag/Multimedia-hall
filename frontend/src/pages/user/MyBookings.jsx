@@ -31,6 +31,7 @@ const MyBookings = () => {
       <Navbar />
       <div className="dashboard-page">
         <PageBackButton fallback="/user/dashboard" />
+
         <div className="page-header">
           <h2>My Booking Requests</h2>
           <p>Track the status of all your submitted requests.</p>
@@ -39,9 +40,20 @@ const MyBookings = () => {
         {loading ? (
           <p>Loading...</p>
         ) : bookings.length === 0 ? (
-          <p className="empty-msg">No bookings found.</p>
+
+          /* ✅ unified empty state */
+          <div className="empty-state">
+            <div className="empty-icon">📭</div>
+            <h3>No bookings yet</h3>
+            <p>Your submitted bookings will appear here.</p>
+          </div>
+
         ) : (
-          <div className="table-card">
+          <div className="table-card card">
+            <p className="result-count">
+              {bookings.length} record(s)
+            </p>
+
             <table className="bookings-table">
               <thead>
                 <tr>
@@ -54,16 +66,39 @@ const MyBookings = () => {
                   <th>Submitted</th>
                 </tr>
               </thead>
+
               <tbody>
                 {bookings.map((b, i) => (
                   <tr key={b.id}>
                     <td>{i + 1}</td>
-                    <td><strong>{b.title}</strong></td>
-                    <td>{new Date(b.event_date).toLocaleDateString()}</td>
-                    <td>{b.start_time} – {b.end_time}</td>
-                    <td><StatusBadge status={b.status} /></td>
-                    <td>{b.admin_note || <span style={{ color: '#9ca3af' }}>—</span>}</td>
-                    <td>{new Date(b.created_at).toLocaleDateString()}</td>
+
+                    <td>
+                      <strong>{b.title}</strong>
+                    </td>
+
+                    <td>
+                      {new Date(b.event_date).toLocaleDateString()}
+                    </td>
+
+                    <td>
+                      {b.start_time} – {b.end_time}
+                    </td>
+
+                    <td>
+                      <StatusBadge status={b.status} />
+                    </td>
+
+                    <td>
+                      {b.admin_note || (
+                        <span style={{ color: 'var(--text-light)' }}>
+                          —
+                        </span>
+                      )}
+                    </td>
+
+                    <td>
+                      {new Date(b.created_at).toLocaleDateString()}
+                    </td>
                   </tr>
                 ))}
               </tbody>

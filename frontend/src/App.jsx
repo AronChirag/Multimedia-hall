@@ -3,9 +3,12 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
-import { AuthProvider } from './context/AuthContext';
+import { AuthProvider, useAuth } from './context/AuthContext';
 import ProtectedRoute from './components/common/ProtectedRoute';
 
+import './App.css';
+
+/* Lazy pages */
 const Login = lazy(() => import('./pages/Login'));
 const CalendarView = lazy(() => import('./pages/CalendarView'));
 const Reports = lazy(() => import('./pages/Reports'));
@@ -16,7 +19,33 @@ const AdminDashboard = lazy(() => import('./pages/admin/AdminDashboard'));
 const AdminRequests = lazy(() => import('./pages/admin/AdminRequests'));
 const AllBookings = lazy(() => import('./pages/admin/AllBookings'));
 
-import './App.css';
+/* 🔹 Smart redirect component */
+const HomeRedirect = () => {
+  const { user } = useAuth();
+
+  if (!user) return <Navigate to="/login" replace />;
+
+  return (
+    <Navigate
+      to={user.role === 'admin' ? '/admin/dashboard' : '/user/dashboard'}
+      replace
+    />
+  );
+};
+
+/* 🔹 Prevent logged-in users from seeing login */
+const PublicRoute = ({ children }) => {
+  const { user } = useAuth();
+  if (user) {
+    return (
+      <Navigate
+        to={user.role === 'admin' ? '/admin/dashboard' : '/user/dashboard'}
+        replace
+      />
+    );
+  }
+  return children;
+};
 
 function App() {
   return (
@@ -24,9 +53,17 @@ function App() {
       <BrowserRouter>
         <Suspense fallback={<div className="loading-screen">Loading...</div>}>
           <Routes>
-            <Route path="/login" element={<Login />} />
-            <Route path="/" element={<Navigate to="/login" replace />} />
 
+            {/* Public */}
+            <Route path="/login" element={
+              <PublicRoute>
+                <Login />
+              </PublicRoute>
+            } />
+
+            <Route path="/" element={<HomeRedirect />} />
+
+            {/* USER */}
             <Route path="/user/dashboard" element={
               <ProtectedRoute role="college"><UserDashboard /></ProtectedRoute>
             } />
@@ -43,6 +80,7 @@ function App() {
               <ProtectedRoute role="college"><Reports /></ProtectedRoute>
             } />
 
+            {/* ADMIN */}
             <Route path="/admin/dashboard" element={
               <ProtectedRoute role="admin"><AdminDashboard /></ProtectedRoute>
             } />
@@ -59,7 +97,9 @@ function App() {
               <ProtectedRoute role="admin"><Reports /></ProtectedRoute>
             } />
 
-            <Route path="*" element={<Navigate to="/login" replace />} />
+            {/* Fallback */}
+            <Route path="*" element={<HomeRedirect />} />
+
           </Routes>
         </Suspense>
 

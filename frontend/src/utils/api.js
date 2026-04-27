@@ -4,6 +4,9 @@ const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
 });
 
+// Auth
+export const loginUser = (data) => api.post('/auth/login', data);
+
 // Attach token from localStorage on every request
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('token');
