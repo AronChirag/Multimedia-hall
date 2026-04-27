@@ -4,6 +4,7 @@ import { downloadPDF, downloadExcel } from '../utils/api';
 import { toast } from 'react-toastify';
 import Navbar from '../components/common/Navbar';
 import PageBackButton from '../components/common/PageBackButton';
+import { COLLEGE_NAMES } from '../constants/colleges';
 import './Reports.css';
 
 const Reports = () => {
@@ -83,9 +84,9 @@ const Reports = () => {
                     <label>College</label>
                     <select name="college" value={filters.college} onChange={handleChange}>
                       <option value="">All Colleges</option>
-                      <option>College A</option>
-                      <option>College B</option>
-                      <option>College C</option>
+                      {COLLEGE_NAMES.map((collegeName) => (
+                        <option key={collegeName}>{collegeName}</option>
+                      ))}
                     </select>
                   </div>
                   <div className="form-group">

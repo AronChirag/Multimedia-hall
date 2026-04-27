@@ -1,16 +1,16 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
   updateBookingStatus,
-  downloadProtectedFile,
   getAllBookings,
-  openProtectedFileInNewTab,
   toApiFileUrl,
+} from '../../utils/api';
 import { openReport, downloadReport } from '../../utils/fileHelpers';
 import { toast } from 'react-toastify';
 import Navbar from '../../components/common/Navbar';
 import PageBackButton from '../../components/common/PageBackButton';
 import StatusBadge from '../../components/common/StatusBadge';
 import useAutoRefresh from '../../hooks/useAutoRefresh';
+import { COLLEGE_NAMES } from '../../constants/colleges';
 import '../Dashboard.css';
 import './AllBookings.css';
 
@@ -83,9 +83,9 @@ const AllBookings = () => {
           <form onSubmit={handleSearch} className="filter-form">
             <select name="college" value={filters.college} onChange={handleChange}>
               <option value="">All Colleges</option>
-              <option>College A</option>
-              <option>College B</option>
-              <option>College C</option>
+              {COLLEGE_NAMES.map((collegeName) => (
+                <option key={collegeName}>{collegeName}</option>
+              ))}
             </select>
             <select name="status" value={filters.status} onChange={handleChange}>
               <option value="">All Statuses</option>

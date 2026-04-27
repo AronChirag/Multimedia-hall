@@ -24,6 +24,9 @@ export const forgotPassword = (email) =>
   api.post("/auth/forgot-password", { email });
 export const changePassword = (oldPassword, newPassword) =>
   api.post("/auth/change-password", { oldPassword, newPassword });
+export const registerPushToken = (token) => api.post('/auth/push-token', { token });
+export const unregisterPushToken = (token) =>
+  api.delete('/auth/push-token', { data: token ? { token } : {} });
 
 // Bookings - College
 export const submitBooking = (data) => api.post("/bookings", data);

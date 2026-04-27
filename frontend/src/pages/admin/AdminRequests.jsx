@@ -37,7 +37,7 @@ const AdminRequests = () => {
     setSubmitting(true);
     try {
       await updateBookingStatus(modal.booking.id, modal.action, note);
-      toast.success(`Booking ${modal.action} successfully. Email sent to college.`);
+      toast.success(`Booking ${modal.action} successfully. Email and app notification sent.`);
       setModal(null);
       fetchPending(false);
     } catch (err) {

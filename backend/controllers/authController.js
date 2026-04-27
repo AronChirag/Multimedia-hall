@@ -3,6 +3,11 @@ const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const db = require('../config/db');
 const { sendPasswordResetEmail } = require('../utils/mailer');
+const {
+  saveUserPushToken,
+  removeUserPushToken,
+  sendPasswordResetPush,
+} = require('../utils/pushNotifications');
 
 const login = async (req, res) => {
   const { email, password } = req.body;
@@ -178,10 +183,42 @@ const forgotPassword = async (req, res) => {
       throw mailErr;
     }
 
+    try {
+      await sendPasswordResetPush(user.id);
+    } catch (pushErr) {
+      console.error('Password reset push failed:', pushErr.message);
+    }
+
     return res.json({ message: 'If the email exists, a temporary password has been sent.' });
   } catch (err) {
     console.error('Forgot password error:', err);
     return res.status(500).json({ message: 'Unable to process password reset right now.' });
+  }
+};
+
+const registerPushToken = async (req, res) => {
+  const token = String(req.body?.token || '').trim();
+  if (!token) {
+    return res.status(400).json({ message: 'Push token is required.' });
+  }
+
+  try {
+    await saveUserPushToken(req.user.id, token, req.headers['user-agent'] || null);
+    return res.json({ message: 'Push token registered.' });
+  } catch (err) {
+    console.error('Register push token error:', err);
+    return res.status(500).json({ message: 'Failed to register push token.' });
+  }
+};
+
+const unregisterPushToken = async (req, res) => {
+  const token = String(req.body?.token || '').trim();
+  try {
+    await removeUserPushToken(req.user.id, token || null);
+    return res.json({ message: 'Push token removed.' });
+  } catch (err) {
+    console.error('Unregister push token error:', err);
+    return res.status(500).json({ message: 'Failed to unregister push token.' });
   }
 };
 
@@ -223,4 +260,12 @@ const changePassword = async (req, res) => {
   }
 };
 
-module.exports = { login, supervisorLogin, getMe, forgotPassword, changePassword };
+module.exports = {
+  login,
+  supervisorLogin,
+  getMe,
+  forgotPassword,
+  changePassword,
+  registerPushToken,
+  unregisterPushToken,
+};

@@ -21,9 +21,9 @@ const seed = async () => {
 
   const users = [
     { name: 'System Admin', email: 'admin@auditorium.com', password: adminPass, role: 'admin', college_name: null },
-    { name: 'College A Rep', email: 'college_a@edu.com', password: collegePass, role: 'college', college_name: 'College A' },
-    { name: 'College B Rep', email: 'college_b@edu.com', password: collegePass, role: 'college', college_name: 'College B' },
-    { name: 'College C Rep', email: 'college_c@edu.com', password: collegePass, role: 'college', college_name: 'College C' },
+    { name: 'Dr H N National College of Engineering Rep', email: 'college_a@edu.com', password: collegePass, role: 'college', college_name: 'Dr H N National College of Engineering' },
+    { name: 'National College Jayanagar Rep', email: 'college_b@edu.com', password: collegePass, role: 'college', college_name: 'National College Jayanagar' },
+    { name: 'National PU College Rep', email: 'college_c@edu.com', password: collegePass, role: 'college', college_name: 'National PU College' },
   ];
 
   for (const u of users) {

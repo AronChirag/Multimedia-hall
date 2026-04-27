@@ -1,9 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
   cancelBookingRequest,
-  downloadProtectedFile,
   getMyBookings,
-  openProtectedFileInNewTab,
   toApiFileUrl,
   uploadEventReport
 } from '../../utils/api';

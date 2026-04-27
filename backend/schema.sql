@@ -51,6 +51,18 @@ CREATE TABLE IF NOT EXISTS audit_logs (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS user_push_tokens (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  user_id INT NOT NULL,
+  token VARCHAR(255) NOT NULL,
+  user_agent VARCHAR(255) NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_push_token (token),
+  INDEX idx_push_user_id (user_id),
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
 -- Daily reminder log table (prevents duplicate reminder mails per booking/day)
 CREATE TABLE IF NOT EXISTS report_reminder_logs (
   id INT AUTO_INCREMENT PRIMARY KEY,
@@ -68,9 +80,9 @@ INSERT IGNORE INTO users (name, email, password, role) VALUES
 
 -- Seed: College users (password: college123 for all)
 INSERT IGNORE INTO users (name, email, password, role, college_name) VALUES
-('College A Rep', 'college_a@edu.com', '$2a$10$YourHashedPasswordHere', 'college', 'College A'),
-('College B Rep', 'college_b@edu.com', '$2a$10$YourHashedPasswordHere', 'college', 'College B'),
-('College C Rep', 'college_c@edu.com', '$2a$10$YourHashedPasswordHere', 'college', 'College C');
+('Dr H N National College of Engineering Rep', 'college_a@edu.com', '$2a$10$YourHashedPasswordHere', 'college', 'Dr H N National College of Engineering'),
+('National College Jayanagar Rep', 'college_b@edu.com', '$2a$10$YourHashedPasswordHere', 'college', 'National College Jayanagar'),
+('National PU College Rep', 'college_c@edu.com', '$2a$10$YourHashedPasswordHere', 'college', 'National PU College');
 
 -- Note: Run the seed script (npm run seed) to insert users with properly hashed passwords
 

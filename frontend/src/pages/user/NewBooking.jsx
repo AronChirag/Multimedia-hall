@@ -73,7 +73,7 @@ const NewBooking = () => {
         end_time: '',
       }));
     }
-  }, [searchParams, location.state, today]);
+  }, [searchParams, location.state]);
 
   useEffect(() => {
     const loadBookings = async () => {

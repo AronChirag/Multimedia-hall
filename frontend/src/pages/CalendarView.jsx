@@ -9,13 +9,8 @@ import { useAuth } from '../context/AuthContext';
 import Navbar from '../components/common/Navbar';
 import PageBackButton from '../components/common/PageBackButton';
 import { toast } from 'react-toastify';
+import { COLLEGE_COLORS } from '../constants/colleges';
 import './Calendar.css';
-
-const COLLEGE_COLORS = {
-  'College A': '#3b82f6',
-  'College B': '#10b981',
-  'College C': '#f59e0b',
-};
 
 const formatDateKey = (date) => {
   const year = date.getFullYear();
