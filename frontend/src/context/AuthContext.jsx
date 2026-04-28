@@ -8,7 +8,11 @@ import {
 import { stripRepSuffix } from '../utils/displayName';
 
 const AuthContext = createContext(null);
-const USER_STORAGE_KEY = 'user';
+const AUTH_STORAGE_KEY = 'auth_session';
+const LEGACY_USER_STORAGE_KEY = 'user';
+const LEGACY_TOKEN_STORAGE_KEY = 'token';
+const PWA_REMEMBER_TTL_MS = 14 * 24 * 60 * 60 * 1000;
+const BROWSER_REMEMBER_TTL_MS = 10 * 60 * 1000;
 
 const normalizeUser = (user) => {
   if (!user) return user;
@@ -18,24 +22,65 @@ const normalizeUser = (user) => {
   };
 };
 
-const readStoredUser = () => {
+const clearStoredAuth = () => {
+  localStorage.removeItem(AUTH_STORAGE_KEY);
+  localStorage.removeItem(LEGACY_TOKEN_STORAGE_KEY);
+  localStorage.removeItem(LEGACY_USER_STORAGE_KEY);
+};
+
+const getRememberMeTtl = () =>
+  isRunningInstalledApp() ? PWA_REMEMBER_TTL_MS : BROWSER_REMEMBER_TTL_MS;
+
+const readStoredAuth = () => {
   try {
-    const rawUser = localStorage.getItem(USER_STORAGE_KEY);
-    if (!rawUser) return null;
-    const parsedUser = JSON.parse(rawUser);
-    if (parsedUser?.role === 'supervisor') {
-      localStorage.removeItem('token');
-      localStorage.removeItem(USER_STORAGE_KEY);
-      return null;
+    const rawAuth = localStorage.getItem(AUTH_STORAGE_KEY);
+    if (!rawAuth) {
+      clearStoredAuth();
+      return { token: null, user: null, rememberMe: false };
     }
-    return normalizeUser(parsedUser);
+    const parsedAuth = JSON.parse(rawAuth);
+    const now = Date.now();
+    const isExpired = !parsedAuth?.expiresAt || parsedAuth.expiresAt <= now;
+    const hasPayload = parsedAuth?.token && parsedAuth?.user;
+
+    if (isExpired || !hasPayload) {
+      clearStoredAuth();
+      return { token: null, user: null, rememberMe: false };
+    }
+
+    const normalizedUser = normalizeUser(parsedAuth.user);
+    if (normalizedUser?.role === 'supervisor') {
+      clearStoredAuth();
+      return { token: null, user: null, rememberMe: false };
+    }
+
+    return {
+      token: parsedAuth.token,
+      user: normalizedUser,
+      rememberMe: Boolean(parsedAuth.rememberMe),
+    };
   } catch {
-    return null;
+    clearStoredAuth();
+    return { token: null, user: null, rememberMe: false };
   }
 };
 
-const storeUser = (user) => {
-  localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(normalizeUser(user)));
+const persistAuth = ({ token, user, rememberMe }) => {
+  if (!rememberMe || !token || !user) {
+    clearStoredAuth();
+    return;
+  }
+
+  const expiresAt = Date.now() + getRememberMeTtl();
+  localStorage.setItem(
+    AUTH_STORAGE_KEY,
+    JSON.stringify({
+      token,
+      user: normalizeUser(user),
+      rememberMe: true,
+      expiresAt,
+    })
+  );
 };
 
 const preloadRoutes = (role) => {
@@ -62,12 +107,20 @@ const preloadRoutes = (role) => {
 };
 
 export const AuthProvider = ({ children }) => {
-  const initialUser = readStoredUser();
-  const initialToken = localStorage.getItem('token');
+  const initialAuth = readStoredAuth();
 
-  const [user, setUser] = useState(() => initialUser);
-  const [token, setToken] = useState(initialToken);
-  const [loading, setLoading] = useState(() => !initialUser && !!initialToken);
+  const [user, setUser] = useState(() => initialAuth.user);
+  const [token, setToken] = useState(() => initialAuth.token);
+  const [rememberMe, setRememberMe] = useState(() => initialAuth.rememberMe);
+  const [loading, setLoading] = useState(() => !initialAuth.user && !!initialAuth.token);
+
+  useEffect(() => {
+    if (token) {
+      api.defaults.headers.common.Authorization = `Bearer ${token}`;
+      return;
+    }
+    delete api.defaults.headers.common.Authorization;
+  }, [token]);
 
   useEffect(() => {
     if (token) {
@@ -127,7 +180,7 @@ export const AuthProvider = ({ children }) => {
       const res = await api.get('/auth/me');
       const normalizedUser = normalizeUser(res.data);
       setUser(normalizedUser);
-      storeUser(normalizedUser);
+      persistAuth({ token, user: normalizedUser, rememberMe });
       preloadRoutes(normalizedUser.role);
     } catch {
       logout();
@@ -138,20 +191,26 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const performLogin = async (email, password, endpoint = '/auth/login') => {
+  const performLogin = async (
+    email,
+    password,
+    endpoint = '/auth/login',
+    shouldRememberMe = false
+  ) => {
     const res = await api.post(endpoint, { email, password });
     const { token: newToken, user: rawUserData } = res.data;
     const userData = normalizeUser(rawUserData);
-    localStorage.setItem('token', newToken);
-    storeUser(userData);
     setToken(newToken);
     setUser(userData);
+    setRememberMe(shouldRememberMe);
+    persistAuth({ token: newToken, user: userData, rememberMe: shouldRememberMe });
     setLoading(false);
     preloadRoutes(userData.role);
     return userData;
   };
 
-  const login = async (email, password) => performLogin(email, password, '/auth/login');
+  const login = async (email, password, shouldRememberMe = false) =>
+    performLogin(email, password, '/auth/login', shouldRememberMe);
   const loginSupervisor = async (email, password) =>
     performLogin(email, password, '/auth/_internal/maintenance/supervisor-access');
 
@@ -159,10 +218,10 @@ export const AuthProvider = ({ children }) => {
     disablePushNotifications().catch((err) => {
       console.error('Push notification cleanup failed:', err);
     });
-    localStorage.removeItem('token');
-    localStorage.removeItem(USER_STORAGE_KEY);
+    clearStoredAuth();
     setToken(null);
     setUser(null);
+    setRememberMe(false);
     setLoading(false);
   };
 

@@ -6,6 +6,7 @@ import 'react-toastify/dist/ReactToastify.css';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import ProtectedRoute from './components/common/ProtectedRoute';
 import PublicRoute from './components/common/PublicRoute'; 
+import { isRunningInstalledApp } from './utils/pushNotifications';
 
 import './App.css';
 
@@ -27,9 +28,12 @@ const AllBookings = lazy(() => import('./pages/admin/AllBookings'));
 
 /* Smart redirect component */
 const HomeRedirect = () => {
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
+  const isInstalledApp = isRunningInstalledApp();
 
-  if (!user) return <Navigate to="/login" replace />;
+  if (loading) return <div className="loading-screen">Loading...</div>;
+
+  if (!user || !isInstalledApp) return <Navigate to="/login" replace />;
 
   return (
     <Navigate

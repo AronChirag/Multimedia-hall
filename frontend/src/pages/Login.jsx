@@ -12,10 +12,15 @@ const Login = () => {
   const [form, setForm] = useState({
     email: '',
     password: '',
+    rememberMe: false,
   });
 
   const handleChange = (e) => {
-    setForm({ ...form, [e.target.name]: e.target.value });
+    const { name, type, value, checked } = e.target;
+    setForm((prev) => ({
+      ...prev,
+      [name]: type === 'checkbox' ? checked : value,
+    }));
   };
 
   const handleSubmit = async (e) => {
@@ -23,7 +28,7 @@ const Login = () => {
     setLoading(true);
 
     try {
-      const userData = await login(form.email, form.password);
+      const userData = await login(form.email, form.password, form.rememberMe);
 
       toast.success(`Welcome, ${userData.name}!`);
 
@@ -100,6 +105,16 @@ const Login = () => {
                   required
                 />
               </div>
+
+              <label className="remember-me-row">
+                <input
+                  type="checkbox"
+                  name="rememberMe"
+                  checked={form.rememberMe}
+                  onChange={handleChange}
+                />
+                <span>Remember me</span>
+              </label>
 
               <div style={{ textAlign: 'right', marginTop: '6px' }}>
                 <Link to="/forgot-password" className="forgot-password-link">

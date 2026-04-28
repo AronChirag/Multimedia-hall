@@ -257,6 +257,22 @@
   text-decoration: underline;
 }
 
+.remember-me-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #374151;
+  font-size: 0.9rem;
+  width: fit-content;
+  cursor: pointer;
+}
+
+.remember-me-row input {
+  width: 1rem;
+  height: 1rem;
+  accent-color: #1a237e;
+}
+
 .login-hints {
   margin-top: 24px;
   padding: 16px;

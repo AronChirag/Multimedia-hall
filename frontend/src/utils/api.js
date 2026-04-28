@@ -14,9 +14,33 @@ const resolveApiOrigin = () => {
 
 // Auth
 export const loginUser = (data) => api.post('/auth/login', data);
-// Attach token from localStorage on every request
+const getStoredAuthToken = () => {
+  const legacyToken = localStorage.getItem("token");
+  if (legacyToken) return legacyToken;
+
+  const rawAuthSession = localStorage.getItem("auth_session");
+  if (!rawAuthSession) return null;
+
+  try {
+    const parsedAuthSession = JSON.parse(rawAuthSession);
+    if (
+      !parsedAuthSession?.token ||
+      !parsedAuthSession?.expiresAt ||
+      parsedAuthSession.expiresAt <= Date.now()
+    ) {
+      localStorage.removeItem("auth_session");
+      return null;
+    }
+    return parsedAuthSession.token;
+  } catch {
+    localStorage.removeItem("auth_session");
+    return null;
+  }
+};
+
+// Attach token from persisted auth session (or legacy token) on every request
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem("token");
+  const token = getStoredAuthToken();
   if (token) config.headers["Authorization"] = `Bearer ${token}`;
   return config;
 });
