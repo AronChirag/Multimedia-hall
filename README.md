@@ -17,7 +17,6 @@ auditorium-booking/
 │   │   └── reportController.js    # PDF, Excel, analytics
 │   ├── middleware/
 │   │   └── auth.js                # JWT verify, role guards
-│   ├── models/                    # (extend here for ORM later)
 │   ├── routes/
 │   │   ├── auth.js
 │   │   ├── bookings.js
@@ -32,8 +31,10 @@ auditorium-booking/
 │   └── package.json
 │
 ├── frontend/
+│   ├── index.html
 │   ├── public/
-│   │   └── index.html
+│   │   ├── favicon.png
+│   │   └── icons/
 │   └── src/
 │       ├── components/
 │       │   └── common/
@@ -57,7 +58,7 @@ auditorium-booking/
 │       ├── utils/
 │       │   └── api.js               # All Axios API calls
 │       ├── App.jsx                  # Routes + providers
-│       └── index.js
+│       └── main.jsx
 │
 ├── package.json                     # Root scripts (concurrently)
 └── README.md
@@ -121,6 +122,10 @@ MAIL_FROM=Auditorium System <yourgmail@gmail.com>
 POST_REPORT_REMINDER_CRON=0 14 * * *
 POST_REPORT_REMINDER_TZ=Asia/Kolkata
 POST_REPORT_REMINDER_RUN_ON_STARTUP=false
+
+FIREBASE_PROJECT_ID=your-project-id
+FIREBASE_CLIENT_EMAIL=firebase-adminsdk-xxxxx@your-project-id.iam.gserviceaccount.com
+FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
 ```
 
 > 📧 **Gmail setup**: Enable 2FA → Google Account → Security → App Passwords → Generate one for "Mail"
@@ -144,14 +149,9 @@ This creates:
 | Email | Password | Role |
 |-------|----------|------|
 | admin@auditorium.com | admin123 | Admin |
-| college_a@edu.com | college123 | College A |
-| college_b@edu.com | college123 | College B |
-| college_c@edu.com | college123 | College C |
-
-Supervisor account is also seeded for maintenance/emergency use only:
-- Email is set from `SUPERVISOR_EMAIL` (default: `supervisor@auditorium.com`)
-- Password comes from `SUPERVISOR_PASSWORD`, or auto-generated one-time during seed
-- Supervisor can sign in only via hidden route: `/_maintenance/supervisor-access-portal`
+| college_a@edu.com | college123 | Dr H N National College of Engineering |
+| college_b@edu.com | college123 | National College Jayanagar |
+| college_c@edu.com | college123 | National PU College |
 
 ### 5. Run the App
 
@@ -173,6 +173,8 @@ Open [http://localhost:3000](http://localhost:3000)
 | POST | `/api/auth/_internal/maintenance/supervisor-access` | Hidden supervisor login |
 | POST | `/api/auth/forgot-password` | Sends temporary password via email |
 | POST | `/api/auth/change-password` | Change password (authenticated) |
+| POST | `/api/auth/push-token` | Register current device FCM token |
+| DELETE | `/api/auth/push-token` | Remove current device FCM token |
 | GET | `/api/auth/me` | Get current user |
 
 ### Bookings
@@ -236,7 +238,7 @@ College User                    Backend                      Admin
     |                               |          Admin reviews    |
     |                               |<── Approve/Reject ────────|
     |                               |── Update DB               |
-    |<── Email Notification ────────|                           |
+    |<── Email + Push Notification ─|                           |
     |                               |                           |
     |── View Calendar ─────────────>|                           |
     |<── Approved Bookings ─────────|                           |
@@ -258,20 +260,27 @@ College User                    Backend                      Admin
 ### Automated post-event report reminders
 
 - The backend runs an automated reminder job daily at **2:00 PM** (configurable by cron expression/timezone).
-- It sends emails to colleges for **approved events that ended before today** and still have no uploaded post-event report.
+- It sends emails and app notifications to colleges for **approved events that ended before today** and still have no uploaded post-event report.
 - Reminders are logged so each booking is emailed at most once per day.
 
 ---
 
-## 🚀 Next Steps / Extensions
+## 📲 PWA + FCM setup
 
-- [ ] Add password reset via email token
-- [ ] Recurring booking requests
-- [ ] Admin can block specific dates
-- [ ] Push notifications (Firebase FCM)
-- [ ] Analytics charts on dashboard (recharts)
-- [ ] Docker Compose for one-command setup
-- [ ] Deploy: Render (backend) + Vercel (frontend) + PlanetScale (DB)
+Create `frontend/.env` with:
+
+```bash
+VITE_API_BASE_URL=/api
+VITE_FIREBASE_API_KEY=your_web_api_key
+VITE_FIREBASE_AUTH_DOMAIN=your-project-id.firebaseapp.com
+VITE_FIREBASE_PROJECT_ID=your-project-id
+VITE_FIREBASE_STORAGE_BUCKET=your-project-id.appspot.com
+VITE_FIREBASE_MESSAGING_SENDER_ID=your_messaging_sender_id
+VITE_FIREBASE_APP_ID=your_firebase_app_id
+VITE_FIREBASE_VAPID_KEY=your_web_push_certificate_key_pair
+```
+
+When admins approve/reject or when post-event reminders are sent, users receive **email + FCM web push** (dual delivery).
 
 ---
 
@@ -283,7 +292,8 @@ College User                    Backend                      Admin
 | Backend | Node.js, Express 4 |
 | Database | MySQL 8 |
 | Auth | JWT (jsonwebtoken) + bcryptjs |
-| Email | Nodemailer (Gmail SMTP) |
+| Notifications | Nodemailer (email) + Firebase Cloud Messaging (web push) |
 | Reports | pdfkit (PDF), exceljs (Excel) |
 | State | React Context API |
 | HTTP Client | Axios |
+| PWA | Vite PWA plugin + Workbox |

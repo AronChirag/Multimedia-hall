@@ -1,5 +1,10 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 import api from '../utils/api';
+import {
+  disablePushNotifications,
+  enablePushNotifications,
+  isRunningInstalledApp,
+} from '../utils/pushNotifications';
 
 const AuthContext = createContext(null);
 const USER_STORAGE_KEY = 'user';
@@ -41,9 +46,12 @@ const preloadRoutes = (role) => {
 };
 
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(() => readStoredUser());
-  const [token, setToken] = useState(localStorage.getItem('token'));
-  const [loading, setLoading] = useState(() => !readStoredUser() && !!localStorage.getItem('token'));
+  const initialUser = readStoredUser();
+  const initialToken = localStorage.getItem('token');
+
+  const [user, setUser] = useState(() => initialUser);
+  const [token, setToken] = useState(initialToken);
+  const [loading, setLoading] = useState(() => !initialUser && !!initialToken);
 
   useEffect(() => {
     if (token) {
@@ -57,6 +65,46 @@ export const AuthProvider = ({ children }) => {
       setLoading(false);
     }
   }, [token]);
+
+  useEffect(() => {
+    if (!token || !user) return;
+
+    const setupPush = (requestPermission) => {
+      enablePushNotifications({ requestPermission }).catch((err) => {
+        console.error('Push notifications setup failed:', err);
+      });
+    };
+
+    setupPush(isRunningInstalledApp());
+
+    const onAppInstalled = () => {
+      setupPush(true);
+    };
+
+    window.addEventListener('appinstalled', onAppInstalled);
+
+    const media = window.matchMedia('(display-mode: standalone)');
+    const onStandaloneChange = (event) => {
+      if (event.matches) {
+        setupPush(true);
+      }
+    };
+
+    if (typeof media.addEventListener === 'function') {
+      media.addEventListener('change', onStandaloneChange);
+    } else if (typeof media.addListener === 'function') {
+      media.addListener(onStandaloneChange);
+    }
+
+    return () => {
+      window.removeEventListener('appinstalled', onAppInstalled);
+      if (typeof media.removeEventListener === 'function') {
+        media.removeEventListener('change', onStandaloneChange);
+      } else if (typeof media.removeListener === 'function') {
+        media.removeListener(onStandaloneChange);
+      }
+    };
+  }, [token, user]);
 
   const fetchMe = async (backgroundRefresh = false) => {
     try {
@@ -90,6 +138,9 @@ export const AuthProvider = ({ children }) => {
     performLogin(email, password, '/auth/_internal/maintenance/supervisor-access');
 
   const logout = () => {
+    disablePushNotifications().catch((err) => {
+      console.error('Push notification cleanup failed:', err);
+    });
     localStorage.removeItem('token');
     localStorage.removeItem(USER_STORAGE_KEY);
     setToken(null);

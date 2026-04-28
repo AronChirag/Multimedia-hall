@@ -1,6 +1,7 @@
 const cron = require('node-cron');
 const db = require('../config/db');
 const { sendPostReportReminderEmail } = require('../utils/mailer');
+const { sendPostReportReminderPush } = require('../utils/pushNotifications');
 
 const defaultFrontendUrl = 'http://localhost:3000';
 
@@ -27,6 +28,7 @@ const fetchPendingReminderBookings = async () => {
         b.event_date,
         b.start_time,
         b.end_time,
+        u.id AS user_id,
         u.email AS user_email,
         u.name AS user_name
       FROM bookings b
@@ -34,12 +36,13 @@ const fetchPendingReminderBookings = async () => {
       LEFT JOIN report_reminder_logs r
         ON r.booking_id = b.id
        AND r.reminder_date = CURDATE()
-      WHERE b.status = 'approved'
-        AND b.event_report_file_path IS NULL
-        AND b.event_date < CURDATE()
-        AND u.email IS NOT NULL
-        AND u.email <> ''
-        AND r.id IS NULL
+       WHERE b.status = 'approved'
+         AND b.event_report_file_path IS NULL
+         AND b.event_report_data IS NULL
+         AND b.event_date < CURDATE()
+         AND u.email IS NOT NULL
+         AND u.email <> ''
+         AND r.id IS NULL
       ORDER BY b.event_date ASC`
   );
   return rows;
@@ -68,6 +71,11 @@ const runPostReportReminderJob = async () => {
         booking,
         uploadPageUrl
       );
+      try {
+        await sendPostReportReminderPush(booking.user_id, booking);
+      } catch (pushErr) {
+        console.error(`Reminder push failed for booking ${booking.id}:`, pushErr.message);
+      }
       await markReminderSent(booking.id, booking.user_email);
     }
 

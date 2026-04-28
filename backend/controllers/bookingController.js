@@ -2,6 +2,7 @@ const db = require('../config/db');
 const fs = require('fs');
 const path = require('path');
 const { sendStatusEmail } = require('../utils/mailer');
+const { sendBookingStatusPush } = require('../utils/pushNotifications');
 const { logAudit } = require('../utils/audit');
 
 const uploadsRoot = path.join(__dirname, '..', 'uploads');
@@ -464,7 +465,7 @@ const updateBookingStatus = async (req, res) => {
 
   try {
     const [bookingRows] = await db.query(
-      `SELECT b.id, b.title, b.college_name, b.event_date, b.start_time, b.end_time, b.status,
+      `SELECT b.id, b.user_id, b.title, b.college_name, b.event_date, b.start_time, b.end_time, b.status,
               u.email, u.name AS user_name
        FROM bookings b
        JOIN users u ON b.user_id = u.id
@@ -513,6 +514,12 @@ const updateBookingStatus = async (req, res) => {
       status,
       admin_note
     );
+    }
+
+    try {
+      await sendBookingStatusPush(booking.user_id, booking, status);
+    } catch (pushErr) {
+      console.error('Booking status push failed:', pushErr.message);
     }
 
     // Audit log

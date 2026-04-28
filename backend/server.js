@@ -7,6 +7,8 @@ const authRoutes = require('./routes/auth');
 const bookingRoutes = require('./routes/bookings');
 const reportRoutes = require('./routes/reports');
 const { startPostReportReminderScheduler } = require('./services/reportReminderScheduler');
+const { ensurePushTokenTable } = require('./utils/pushNotifications');
+const { syncCollegeNames } = require('./services/collegeNameSync');
 const { actionLogger } = require('./middleware/actionLogger');
 
 const app = express();
@@ -47,7 +49,16 @@ app.use((err, req, res, next) => {
 
 // ─── Start ────────────────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-  console.log(`🚀 Server running on http://localhost:${PORT}`);
-  startPostReportReminderScheduler();
+const boot = async () => {
+  await ensurePushTokenTable();
+  await syncCollegeNames();
+  app.listen(PORT, () => {
+    console.log(`🚀 Server running on http://localhost:${PORT}`);
+    startPostReportReminderScheduler();
+  });
+};
+
+boot().catch((err) => {
+  console.error('Server startup failed:', err);
+  process.exit(1);
 });
