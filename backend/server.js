@@ -6,10 +6,12 @@ require('dotenv').config({ path: path.resolve(__dirname, '.env') });
 const authRoutes = require('./routes/auth');
 const bookingRoutes = require('./routes/bookings');
 const reportRoutes = require('./routes/reports');
+const firebaseRoutes = require('./routes/firebase');
 const { startPostReportReminderScheduler } = require('./services/reportReminderScheduler');
 const { ensurePushTokenTable } = require('./utils/pushNotifications');
 const { syncCollegeNames } = require('./services/collegeNameSync');
 const { actionLogger } = require('./middleware/actionLogger');
+const { initializeFirebaseAdmin } = require('./utils/firebaseUtils');
 
 const app = express();
 
@@ -26,6 +28,7 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.use('/api/auth', authRoutes);
 app.use('/api/bookings', bookingRoutes);
 app.use('/api/reports', reportRoutes);
+app.use('/api/firebase', firebaseRoutes);
 
 // ─── Health check ─────────────────────────────────────────────────────────────
 app.get('/api/health', (req, res) => res.json({ status: 'ok', timestamp: new Date() }));
@@ -50,6 +53,7 @@ app.use((err, req, res, next) => {
 // ─── Start ────────────────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 5000;
 const boot = async () => {
+  initializeFirebaseAdmin();
   await ensurePushTokenTable();
   await syncCollegeNames();
   app.listen(PORT, () => {

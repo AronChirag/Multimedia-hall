@@ -7,69 +7,66 @@ import PageBackButton from "../components/common/PageBackButton";
 import { COLLEGE_NAMES } from "../constants/colleges";
 import "./Reports.css";
 
+const EXPORT_TYPES = [
+  {
+    key: "pdf",
+    label: "📄 Download PDF",
+    api: downloadPDF,
+    filename: () => "bookings_report.pdf",
+  },
+  {
+    key: "excel",
+    label: "📊 Download Excel",
+    api: downloadExcel,
+    filename: () => "bookings_report.xlsx",
+  },
+  {
+    key: "logs",
+    label: "📝 Download Action Logs",
+    api: downloadActionLogs,
+    filename: () => `actions-${new Date().toISOString().slice(0, 10)}.log`,
+    supervisorOnly: true,
+  },
+];
+
+const activeFilters = (filters) =>
+  Object.fromEntries(
+    Object.entries(filters).filter(([, v]) => String(v).trim()),
+  );
+
 const Reports = () => {
   const { user } = useAuth();
   const isAdmin = ["admin", "supervisor"].includes(user?.role);
   const isSupervisor = user?.role === "supervisor";
 
-  const [filters, setFilters] = useState({
-    college: "",
-    status: "",
-    from: "",
-    to: "",
-  });
+  const [filters, setFilters] = useState({ college: "", from: "", to: "" });
+  const [loading, setLoading] = useState({});
 
-  const [loading, setLoading] = useState({ pdf: false, excel: false, logs: false });
-
-  const handleChange = (e) => {
+  const handleChange = (e) =>
     setFilters((prev) => ({ ...prev, [e.target.name]: e.target.value }));
-  };
 
-  const triggerDownload = (blob, filename) => {
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  };
-
-  const handleDownload = async (type) => {
-    setLoading((prev) => ({ ...prev, [type]: true }));
-
+  const handleDownload = async ({ key, api, filename }) => {
+    setLoading((prev) => ({ ...prev, [key]: true }));
     try {
-      const params = Object.fromEntries(
-        Object.entries(filters).filter(
-          ([, v]) => String(v || "").trim() !== "",
-        ),
-      );
-
-      let res;
-      let filename;
-
-      if (type === "pdf") {
-        res = await downloadPDF(params);
-        filename = "bookings_report.pdf";
-      } else if (type === "excel") {
-        res = await downloadExcel(params);
-        filename = "bookings_report.xlsx";
-      } else if (type === "logs") {
-        res = await downloadActionLogs();
-        filename = `actions-${new Date().toISOString().slice(0, 10)}.log`;
-      }
-
-      triggerDownload(res.data, filename);
-
-      toast.success(`${type.toUpperCase()} report downloaded successfully!`);
-    } catch (err) {
-      console.error(err);
-      toast.error(`Failed to download ${type.toUpperCase()} report`);
+      const params = key === "logs" ? undefined : activeFilters(filters);
+      const res = await api(params);
+      const url = URL.createObjectURL(res.data);
+      Object.assign(document.createElement("a"), {
+        href: url,
+        download: filename(),
+      }).click();
+      URL.revokeObjectURL(url);
+      toast.success(`${key.toUpperCase()} downloaded successfully!`);
+    } catch {
+      toast.error(`Failed to download ${key.toUpperCase()} report.`);
     } finally {
-      setLoading((prev) => ({ ...prev, [type]: false }));
+      setLoading((prev) => ({ ...prev, [key]: false }));
     }
   };
+
+  const visibleExports = EXPORT_TYPES.filter(
+    (t) => !t.supervisorOnly || isSupervisor,
+  );
 
   return (
     <div>
@@ -82,16 +79,14 @@ const Reports = () => {
         <div className="page-header">
           <h2>📊 Reports</h2>
           <p>
-            Export booking data as <strong>PDF or Excel</strong> using the{" "}
-            <strong>same tabular format</strong> (including event description,
-            poster/report links, etc.).
+            Export booking data as <strong>PDF or Excel</strong> — includes
+            event description, poster/report links, and more.
           </p>
         </div>
 
         <div className="reports-card">
           <div className="filters-section">
             <h3>Filters</h3>
-
             <div className="filters-grid">
               {isAdmin && (
                 <div className="form-group">
@@ -111,21 +106,6 @@ const Reports = () => {
                   </select>
                 </div>
               )}
-
-              <div className="form-group">
-                <label>Status</label>
-                <select
-                  name="status"
-                  value={filters.status}
-                  onChange={handleChange}
-                  className="input"
-                >
-                  <option value="">All Statuses</option>
-                  <option value="pending">Pending</option>
-                  <option value="approved">Approved</option>
-                  <option value="rejected">Rejected</option>
-                </select>
-              </div>
 
               <div className="form-group">
                 <label>From Date</label>
@@ -152,38 +132,19 @@ const Reports = () => {
           </div>
 
           <div className="export-buttons">
-            <button
-              className="btn btn-accent"
-              onClick={() => handleDownload("pdf")}
-              disabled={loading.pdf}
-            >
-              {loading.pdf ? "Generating PDF..." : "📄 Download PDF"}
-            </button>
-
-            <button
-              className="btn btn-accent"
-              onClick={() => handleDownload("excel")}
-              disabled={loading.excel}
-            >
-              {loading.excel ? "Generating Excel..." : "📊 Download Excel"}
-            </button>
-
-            {isSupervisor && (
+            {visibleExports.map((type) => (
               <button
-                className="btn btn-secondary"
-                onClick={() => handleDownload("logs")}
-                disabled={loading.logs}
-                style={{ marginLeft: '10px' }}
+                key={type.key}
+                className={`btn ${type.supervisorOnly ? "btn-secondary" : "btn-accent"}`}
+                onClick={() => handleDownload(type)}
+                disabled={!!loading[type.key]}
               >
-                {loading.logs ? "Downloading Logs..." : "📝 Download Action Logs"}
+                {loading[type.key]
+                  ? `Generating ${type.key.toUpperCase()}...`
+                  : type.label}
               </button>
-            )}
+            ))}
           </div>
-
-          <small style={{ marginTop: "1rem", display: "block", color: "#666" }}>
-            Both formats now use the same data structure (Excel layout mirrored
-            in PDF)
-          </small>
         </div>
       </div>
     </div>

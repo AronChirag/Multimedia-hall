@@ -138,4 +138,41 @@ export const downloadProtectedFile = async (
   setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
 };
 
+// Firebase Firestore API
+export const setFirestoreDocument = (collection, documentId, data) =>
+  api.post(`/firebase/firestore/${collection}`, { documentId, data });
+
+export const getFirestoreDocument = (collection, documentId) =>
+  api.get(`/firebase/firestore/${collection}/${documentId}`);
+
+export const updateFirestoreDocument = (collection, documentId, data) =>
+  api.patch(`/firebase/firestore/${collection}/${documentId}`, { data });
+
+export const deleteFirestoreDocument = (collection, documentId) =>
+  api.delete(`/firebase/firestore/${collection}/${documentId}`);
+
+export const queryFirestoreCollection = (collection, conditions) =>
+  api.post(`/firebase/firestore/${collection}/query`, { conditions });
+
+// Firebase Realtime Database API
+export const setRealtimeData = (path, data) =>
+  api.post(`/firebase/realtime/${path}`, { data });
+
+export const getRealtimeData = (path) =>
+  api.get(`/firebase/realtime/${path}`);
+
+export const updateRealtimeData = (path, updates) =>
+  api.patch(`/firebase/realtime/${path}`, { updates });
+
+export const deleteRealtimeData = (path) =>
+  api.delete(`/firebase/realtime/${path}`);
+
+// Firebase Analytics API
+export const logAnalyticsEvent = (eventName, eventData) =>
+  api.post('/firebase/analytics/log', { eventName, eventData });
+
+// Firebase Health Check
+export const checkFirebaseHealth = () =>
+  api.get('/firebase/health');
+
 export default api;

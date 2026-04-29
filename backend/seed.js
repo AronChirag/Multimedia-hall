@@ -20,8 +20,8 @@ const seed = async () => {
   const supervisorPassHash = await bcrypt.hash(supervisorPassword, 10);
 
   const users = [
-    { name: 'System Admin', email: 'admin@auditorium.com', password: adminPass, role: 'admin', college_name: null },
-    { name: 'Dr H N National College of Engineering', email: 'college_a@edu.com', password: collegePass, role: 'college', college_name: 'Dr H N National College of Engineering' },
+    { name: 'System Admin', email: 'prajwalnavada74@gmail.com', password: adminPass, role: 'admin', college_name: null },
+    { name: 'Dr H N National College of Engineering', email: 'prajwal3363@gmail.com', password: collegePass, role: 'college', college_name: 'Dr H N National College of Engineering' },
     { name: 'National College Jayanagar', email: 'college_b@edu.com', password: collegePass, role: 'college', college_name: 'National College Jayanagar' },
     { name: 'National PU College', email: 'college_c@edu.com', password: collegePass, role: 'college', college_name: 'National PU College' },
   ];

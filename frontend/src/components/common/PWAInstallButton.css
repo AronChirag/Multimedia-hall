@@ -1,0 +1,120 @@
+.pwa-install-container {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  padding: 1rem;
+  z-index: 1000;
+  animation: slideUp 0.3s ease-out;
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.pwa-install-prompt {
+  background: linear-gradient(135deg, #1e3a5f 0%, #2d5a8c 100%);
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+  padding: 1.5rem;
+  max-width: 500px;
+  width: 100%;
+  color: white;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.pwa-install-content {
+  flex: 1;
+}
+
+.pwa-install-title {
+  margin: 0 0 0.5rem 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #ffffff;
+}
+
+.pwa-install-description {
+  margin: 0;
+  font-size: 0.95rem;
+  color: rgba(255, 255, 255, 0.9);
+  line-height: 1.4;
+}
+
+.pwa-install-actions {
+  display: flex;
+  gap: 0.75rem;
+  flex-shrink: 0;
+}
+
+.pwa-install-btn {
+  padding: 0.5rem 1.25rem;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.95rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.pwa-install-cancel {
+  background-color: rgba(255, 255, 255, 0.2);
+  color: white;
+}
+
+.pwa-install-cancel:hover {
+  background-color: rgba(255, 255, 255, 0.3);
+  transform: translateY(-2px);
+}
+
+.pwa-install-accept {
+  background-color: #4CAF50;
+  color: white;
+}
+
+.pwa-install-accept:hover {
+  background-color: #45a049;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(76, 175, 80, 0.3);
+}
+
+.pwa-install-btn:active {
+  transform: translateY(0);
+}
+
+@media (max-width: 600px) {
+  .pwa-install-container {
+    padding: 0.75rem;
+  }
+
+  .pwa-install-prompt {
+    flex-direction: column;
+    padding: 1rem;
+    gap: 1rem;
+    align-items: stretch;
+  }
+
+  .pwa-install-actions {
+    width: 100%;
+    flex-direction: row-reverse;
+  }
+
+  .pwa-install-btn {
+    flex: 1;
+  }
+}

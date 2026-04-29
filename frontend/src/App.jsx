@@ -5,7 +5,8 @@ import 'react-toastify/dist/ReactToastify.css';
 
 import { AuthProvider, useAuth } from './context/AuthContext';
 import ProtectedRoute from './components/common/ProtectedRoute';
-import PublicRoute from './components/common/PublicRoute'; 
+import PublicRoute from './components/common/PublicRoute';
+import PWAInstallButton from './components/common/PWAInstallButton';
 import { isRunningInstalledApp } from './utils/pushNotifications';
 
 import './App.css';
@@ -126,6 +127,8 @@ function App() {
           pauseOnHover
           theme="light"
         />
+
+        <PWAInstallButton />
       </BrowserRouter>
     </AuthProvider>
   );
