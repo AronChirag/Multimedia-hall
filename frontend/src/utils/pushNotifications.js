@@ -49,7 +49,12 @@ const setStoredToken = (token) => {
 };
 
 export const enablePushNotifications = async ({ requestPermission = true } = {}) => {
-  if (typeof window === 'undefined' || !('serviceWorker' in navigator) || !('Notification' in window)) {
+  if (
+    typeof window === 'undefined' ||
+    !window.isSecureContext ||
+    !('serviceWorker' in navigator) ||
+    !('Notification' in window)
+  ) {
     return;
   }
 

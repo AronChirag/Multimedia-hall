@@ -34,12 +34,14 @@ const AdminRequests = () => {
 
   const handleDecision = async () => {
     if (!modal) return;
+    const { booking, action } = modal;
     setSubmitting(true);
     try {
-      await updateBookingStatus(modal.booking.id, modal.action, note);
-      toast.success(`Booking ${modal.action} successfully. Email and app notification sent.`);
+      await updateBookingStatus(booking.id, action, note);
+      setRequests((current) => current.filter((request) => request.id !== booking.id));
       setModal(null);
-      fetchPending(false);
+      toast.success(`Booking ${action} successfully. Notifications are being sent.`);
+      fetchPending(false).catch(() => {});
     } catch (err) {
       toast.error(err.response?.data?.message || 'Action failed.');
     } finally {
@@ -80,7 +82,13 @@ const AdminRequests = () => {
                 <div className="request-poster">
                   {b.poster_url ? (
                     <a href={toApiFileUrl(b.poster_url)} target="_blank" rel="noopener noreferrer">
-                      <img src={toApiFileUrl(b.poster_url)} alt={`${b.title} poster`} className="request-poster-image" />
+                      <img
+                        src={toApiFileUrl(b.poster_url)}
+                        alt={`${b.title} poster`}
+                        className="request-poster-image"
+                        loading="lazy"
+                        decoding="async"
+                      />
                     </a>
                   ) : (
                     <p className="poster-empty">No poster uploaded.</p>

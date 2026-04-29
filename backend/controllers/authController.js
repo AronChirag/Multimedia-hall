@@ -2,7 +2,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const db = require('../config/db');
-const { sendPasswordResetEmail } = require('../utils/mailer');
+const { normalizeEmail, isValidEmail, sendPasswordResetEmail } = require('../utils/mailer');
 const {
   saveUserPushToken,
   removeUserPushToken,
@@ -171,13 +171,19 @@ const forgotPassword = async (req, res) => {
     }
 
     const user = rows[0];
+    const recipientEmail = normalizeEmail(user.email);
+    if (!isValidEmail(recipientEmail)) {
+      console.warn(`Password reset skipped: invalid email for user ${user.id}`);
+      return res.status(400).json({ message: 'No valid email is registered for this account.' });
+    }
+
     const temporaryPassword = generateTemporaryPassword();
     const passwordHash = await bcrypt.hash(temporaryPassword, 10);
 
     await db.query('UPDATE users SET password = ? WHERE id = ?', [passwordHash, user.id]);
 
     try {
-      await sendPasswordResetEmail(user.email, user.name, temporaryPassword);
+      await sendPasswordResetEmail(recipientEmail, user.name, temporaryPassword);
     } catch (mailErr) {
       await db.query('UPDATE users SET password = ? WHERE id = ?', [user.password, user.id]);
       throw mailErr;

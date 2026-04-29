@@ -1,6 +1,11 @@
 const cron = require('node-cron');
 const db = require('../config/db');
-const { sendPostReportReminderEmail } = require('../utils/mailer');
+const {
+  hasMailConfig,
+  isValidEmail,
+  normalizeEmail,
+  sendPostReportReminderEmail,
+} = require('../utils/mailer');
 const { sendPostReportReminderPush } = require('../utils/pushNotifications');
 
 const defaultFrontendUrl = 'http://localhost:3000';
@@ -65,8 +70,14 @@ const runPostReportReminderJob = async () => {
     const uploadPageUrl = `${process.env.FRONTEND_URL || defaultFrontendUrl}/user/my-bookings`;
 
     for (const booking of pendingBookings) {
+      const recipientEmail = normalizeEmail(booking.user_email);
+      if (!isValidEmail(recipientEmail)) {
+        console.warn(`Skipping reminder email for booking ${booking.id}: invalid user email "${booking.user_email || ''}"`);
+        continue;
+      }
+
       await sendPostReportReminderEmail(
-        booking.user_email,
+        recipientEmail,
         booking.user_name || booking.college_name,
         booking,
         uploadPageUrl
@@ -76,7 +87,7 @@ const runPostReportReminderJob = async () => {
       } catch (pushErr) {
         console.error(`Reminder push failed for booking ${booking.id}:`, pushErr.message);
       }
-      await markReminderSent(booking.id, booking.user_email);
+      await markReminderSent(booking.id, recipientEmail);
     }
 
     console.log(`Post-report reminder job completed. Sent: ${pendingBookings.length}`);
@@ -86,14 +97,7 @@ const runPostReportReminderJob = async () => {
 };
 
 const startPostReportReminderScheduler = () => {
-  const hasMailConfig = Boolean(
-    process.env.MAIL_HOST &&
-      process.env.MAIL_USER &&
-      process.env.MAIL_PASS &&
-      process.env.MAIL_FROM
-  );
-
-  if (!hasMailConfig) {
+  if (!hasMailConfig()) {
     console.warn('Post-report reminders disabled: missing mail configuration.');
     return null;
   }

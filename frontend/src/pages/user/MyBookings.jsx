@@ -107,6 +107,9 @@ const MyBookings = () => {
         <div className="page-header">
           <h2>My Booking Requests</h2>
           <p>Track the status of all your submitted requests.</p>
+          <p style={{ marginTop: 6, color: '#6b7280', fontSize: 14 }}>
+            For approved events, upload the post-event report here after the event ends.
+          </p>
         </div>
 
         {loading ? (

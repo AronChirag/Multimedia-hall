@@ -1,7 +1,7 @@
 const db = require('../config/db');
 const fs = require('fs');
 const path = require('path');
-const { sendStatusEmail } = require('../utils/mailer');
+const { normalizeEmail, isValidEmail, sendStatusEmail } = require('../utils/mailer');
 const { sendBookingStatusPush } = require('../utils/pushNotifications');
 const { logAudit } = require('../utils/audit');
 
@@ -54,6 +54,36 @@ const withFileLinks = (booking) => ({
       ? `/api/bookings/${booking.id}/report`
       : null,
 });
+
+const sendBookingDecisionNotifications = async (booking, status, adminNote) => {
+  const notificationTasks = [];
+  const recipientEmail = normalizeEmail(booking.email);
+
+  if (isValidEmail(recipientEmail)) {
+    notificationTasks.push(
+      sendStatusEmail(
+        recipientEmail,
+        booking.user_name || booking.college_name,
+        booking,
+        status,
+        adminNote
+      )
+    );
+  } else {
+    console.warn(
+      `Skipping booking status email for booking ${booking.id}: invalid user email "${booking.email || ''}"`
+    );
+  }
+
+  notificationTasks.push(sendBookingStatusPush(booking.user_id, booking, status));
+
+  const results = await Promise.allSettled(notificationTasks);
+  results.forEach((result) => {
+    if (result.status === 'rejected') {
+      console.error('Booking status notification failed:', result.reason?.message || result.reason);
+    }
+  });
+};
 
 // ─── College User: Submit a booking request ─────────────────────────────────
 const createBooking = async (req, res) => {
@@ -505,23 +535,6 @@ const updateBookingStatus = async (req, res) => {
       [status, admin_note || null, id]
     );
 
-    // Send email (optional)
-    if (booking.email) {
-      await sendStatusEmail(
-      booking.email,
-      booking.user_name || booking.college_name,
-      booking,
-      status,
-      admin_note
-    );
-    }
-
-    try {
-      await sendBookingStatusPush(booking.user_id, booking, status);
-    } catch (pushErr) {
-      console.error('Booking status push failed:', pushErr.message);
-    }
-
     // Audit log
     await logAudit(
       'BOOKING_STATUS_UPDATED',
@@ -532,6 +545,16 @@ const updateBookingStatus = async (req, res) => {
 
     res.json({
       message: `Booking ${status} successfully.`,
+      notificationStatus: 'queued',
+    });
+
+    setImmediate(() => {
+      sendBookingDecisionNotifications(booking, status, admin_note).catch((notificationErr) => {
+        console.error(
+          `Booking status notifications failed for booking ${id}:`,
+          notificationErr.message
+        );
+      });
     });
   } catch (err) {
     console.error('Update booking error:', err);

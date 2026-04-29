@@ -1,15 +1,72 @@
 const nodemailer = require('nodemailer');
-require('dotenv').config();
+const path = require('path');
 
-const transporter = nodemailer.createTransport({
-  host: process.env.MAIL_HOST,
-  port: parseInt(process.env.MAIL_PORT) || 587,
-  secure: false,
-  auth: {
-    user: process.env.MAIL_USER,
-    pass: process.env.MAIL_PASS,
-  },
-});
+require('dotenv').config({ path: path.resolve(__dirname, '..', '.env') });
+
+let transporter = null;
+let transportVerified = false;
+
+const normalizeEmail = (value) => String(value || '').trim().toLowerCase();
+
+const isValidEmail = (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizeEmail(value));
+
+const hasMailConfig = () =>
+  Boolean(
+    process.env.MAIL_HOST &&
+      process.env.MAIL_PORT &&
+      process.env.MAIL_USER &&
+      process.env.MAIL_PASS &&
+      process.env.MAIL_FROM
+  );
+
+const getTransporter = () => {
+  if (!hasMailConfig()) {
+    throw new Error('Mail configuration is incomplete.');
+  }
+
+  if (transporter) return transporter;
+
+  const port = Number.parseInt(process.env.MAIL_PORT, 10) || 587;
+  const secure =
+    process.env.MAIL_SECURE === 'true' ||
+    process.env.MAIL_SECURE === '1' ||
+    port === 465;
+
+  transporter = nodemailer.createTransport({
+    host: process.env.MAIL_HOST,
+    port,
+    secure,
+    auth: {
+      user: process.env.MAIL_USER,
+      pass: process.env.MAIL_PASS,
+    },
+  });
+
+  return transporter;
+};
+
+const verifyTransportOnce = async () => {
+  if (transportVerified) return;
+  await getTransporter().verify();
+  transportVerified = true;
+};
+
+const sendMailToRecipient = async ({ toEmail, subject, html }) => {
+  const normalizedRecipient = normalizeEmail(toEmail);
+  if (!isValidEmail(normalizedRecipient)) {
+    throw new Error(`Invalid recipient email: ${toEmail || '(empty)'}`);
+  }
+
+  await verifyTransportOnce();
+  await getTransporter().sendMail({
+    from: process.env.MAIL_FROM,
+    to: normalizedRecipient,
+    subject,
+    html,
+  });
+
+  return normalizedRecipient;
+};
 
 const sendStatusEmail = async (toEmail, userName, booking, status, adminNote) => {
   const isApproved = status === 'approved';
@@ -35,23 +92,18 @@ const sendStatusEmail = async (toEmail, userName, booking, status, adminNote) =>
           </table>
         </div>
 
-        ${!isApproved ? '<p>You may submit a new request for a different time slot.</p>' : '<p>Please ensure the auditorium is left in good condition after your event.</p>'}
+        ${!isApproved ? '<p>You may submit a new request for a different time slot.</p>' : '<p>Please ensure the auditorium is left in good condition after your event.</p><p>After the event ends, upload your post-event report from the <strong>My Bookings</strong> page.</p>'}
         <p style="color: #6b7280; font-size: 12px; margin-top: 30px;">This is an automated message. Do not reply.</p>
       </div>
     </div>
   `;
 
-  try {
-    await transporter.sendMail({
-      from: process.env.MAIL_FROM,
-      to: toEmail,
-      subject: `Booking ${isApproved ? 'Approved' : 'Rejected'}: ${booking.title}`,
-      html,
-    });
-    console.log(`Email sent to ${toEmail}`);
-  } catch (err) {
-    console.error('Email send failed:', err.message);
-  }
+  const recipient = await sendMailToRecipient({
+    toEmail,
+    subject: `Booking ${isApproved ? 'Approved' : 'Rejected'}: ${booking.title}`,
+    html,
+  });
+  console.log(`Email sent to ${recipient}`);
 };
 
 const sendPostReportReminderEmail = async (toEmail, userName, booking, uploadPageUrl) => {
@@ -84,18 +136,12 @@ const sendPostReportReminderEmail = async (toEmail, userName, booking, uploadPag
     </div>
   `;
 
-  try {
-    await transporter.sendMail({
-      from: process.env.MAIL_FROM,
-      to: toEmail,
-      subject: `Reminder: Upload post-event report for ${booking.title}`,
-      html,
-    });
-    console.log(`Reminder email sent to ${toEmail} for booking ${booking.id}`);
-  } catch (err) {
-    console.error('Reminder email send failed:', err.message);
-    throw err;
-  }
+  const recipient = await sendMailToRecipient({
+    toEmail,
+    subject: `Reminder: Upload post-event report for ${booking.title}`,
+    html,
+  });
+  console.log(`Reminder email sent to ${recipient} for booking ${booking.id}`);
 };
 
 const sendPasswordResetEmail = async (toEmail, userName, temporaryPassword) => {
@@ -119,12 +165,19 @@ const sendPasswordResetEmail = async (toEmail, userName, temporaryPassword) => {
     </div>
   `;
 
-  await transporter.sendMail({
-    from: process.env.MAIL_FROM,
-    to: toEmail,
+  const recipient = await sendMailToRecipient({
+    toEmail,
     subject: 'Temporary Password - Auditorium Booking System',
     html,
   });
+  console.log(`Password reset email sent to ${recipient}`);
 };
 
-module.exports = { sendStatusEmail, sendPostReportReminderEmail, sendPasswordResetEmail };
+module.exports = {
+  hasMailConfig,
+  isValidEmail,
+  normalizeEmail,
+  sendStatusEmail,
+  sendPostReportReminderEmail,
+  sendPasswordResetEmail,
+};

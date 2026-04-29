@@ -138,13 +138,18 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
     if (!token || !user) return;
 
+    const canPromptForPush =
+      typeof window !== 'undefined' &&
+      window.isSecureContext &&
+      'Notification' in window;
+
     const setupPush = (requestPermission) => {
       enablePushNotifications({ requestPermission }).catch((err) => {
         console.error('Push notifications setup failed:', err);
       });
     };
 
-    setupPush(isRunningInstalledApp());
+    setupPush(canPromptForPush);
 
     const onAppInstalled = () => {
       setupPush(true);

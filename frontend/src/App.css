@@ -117,11 +117,12 @@ html {
 ================================ */
 .card {
   background: var(--card-bg);
-  border-radius: 16px;
+  border-radius: 8px;
   border: 1px solid var(--border);
   box-shadow: 0 8px 30px rgba(0,0,0,0.06);
   padding: var(--space-md);
-  transition: all 0.2s ease;
+  min-width: 0;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
 .card:hover {
@@ -139,6 +140,7 @@ button {
 .btn {
   border-radius: 999px;
   font-weight: 600;
+  min-height: 40px;
   transition: transform 0.15s ease, background-color 0.2s ease, color 0.2s ease;
 }
 
@@ -203,6 +205,8 @@ button:disabled {
   border-radius: 10px;
   border: 1px solid var(--border);
   outline: none;
+  min-height: 40px;
+  max-width: 100%;
   transition: border-color 0.2s, box-shadow 0.2s;
 }
 
@@ -309,6 +313,11 @@ button:disabled {
   .page {
     padding: var(--space-md);
   }
+
+  .btn,
+  .input {
+    min-height: 44px;
+  }
 }
 
 .app-footer {
@@ -340,5 +349,17 @@ button:disabled {
   .app-footer {
     flex-direction: column;
     align-items: flex-start;
+    padding: 12px 16px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
   }
 }

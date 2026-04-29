@@ -12,7 +12,7 @@ const {
   logEvent,
   isPushConfigured,
 } = require('../utils/firebaseUtils');
-const { authenticateToken } = require('../middleware/auth');
+const { authenticate } = require('../middleware/auth');
 
 const router = express.Router();
 
@@ -26,7 +26,7 @@ router.get('/health', (req, res) => {
 });
 
 // Firestore endpoints
-router.post('/firestore/:collection', authenticateToken, async (req, res) => {
+router.post('/firestore/:collection', authenticate, async (req, res) => {
   try {
     const { collection } = req.params;
     const { documentId, data } = req.body;
@@ -46,7 +46,7 @@ router.post('/firestore/:collection', authenticateToken, async (req, res) => {
   }
 });
 
-router.get('/firestore/:collection/:documentId', authenticateToken, async (req, res) => {
+router.get('/firestore/:collection/:documentId', authenticate, async (req, res) => {
   try {
     const { collection, documentId } = req.params;
     const result = await getDocument(collection, documentId);
@@ -61,7 +61,7 @@ router.get('/firestore/:collection/:documentId', authenticateToken, async (req, 
   }
 });
 
-router.patch('/firestore/:collection/:documentId', authenticateToken, async (req, res) => {
+router.patch('/firestore/:collection/:documentId', authenticate, async (req, res) => {
   try {
     const { collection, documentId } = req.params;
     const { data } = req.body;
@@ -81,7 +81,7 @@ router.patch('/firestore/:collection/:documentId', authenticateToken, async (req
   }
 });
 
-router.delete('/firestore/:collection/:documentId', authenticateToken, async (req, res) => {
+router.delete('/firestore/:collection/:documentId', authenticate, async (req, res) => {
   try {
     const { collection, documentId } = req.params;
     const result = await deleteDocument(collection, documentId);
@@ -96,7 +96,7 @@ router.delete('/firestore/:collection/:documentId', authenticateToken, async (re
   }
 });
 
-router.post('/firestore/:collection/query', authenticateToken, async (req, res) => {
+router.post('/firestore/:collection/query', authenticate, async (req, res) => {
   try {
     const { collection } = req.params;
     const { conditions } = req.body;
@@ -113,7 +113,7 @@ router.post('/firestore/:collection/query', authenticateToken, async (req, res) 
 });
 
 // Realtime Database endpoints
-router.post('/realtime/*', authenticateToken, async (req, res) => {
+router.post('/realtime/*', authenticate, async (req, res) => {
   try {
     const path = req.params[0];
     const { data } = req.body;
@@ -133,7 +133,7 @@ router.post('/realtime/*', authenticateToken, async (req, res) => {
   }
 });
 
-router.get('/realtime/*', authenticateToken, async (req, res) => {
+router.get('/realtime/*', authenticate, async (req, res) => {
   try {
     const path = req.params[0];
     const result = await getRealtimeData(path);
@@ -148,7 +148,7 @@ router.get('/realtime/*', authenticateToken, async (req, res) => {
   }
 });
 
-router.patch('/realtime/*', authenticateToken, async (req, res) => {
+router.patch('/realtime/*', authenticate, async (req, res) => {
   try {
     const path = req.params[0];
     const { updates } = req.body;
@@ -168,7 +168,7 @@ router.patch('/realtime/*', authenticateToken, async (req, res) => {
   }
 });
 
-router.delete('/realtime/*', authenticateToken, async (req, res) => {
+router.delete('/realtime/*', authenticate, async (req, res) => {
   try {
     const path = req.params[0];
     const result = await deleteRealtimeData(path);
@@ -184,7 +184,7 @@ router.delete('/realtime/*', authenticateToken, async (req, res) => {
 });
 
 // Analytics endpoint
-router.post('/analytics/log', authenticateToken, async (req, res) => {
+router.post('/analytics/log', authenticate, async (req, res) => {
   try {
     const { eventName, eventData } = req.body;
     const userId = req.userId || req.user?.id;

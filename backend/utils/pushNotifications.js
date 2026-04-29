@@ -1,33 +1,6 @@
-const admin = require('firebase-admin');
 const db = require('../config/db');
-
-let firebaseApp = null;
+const { getMessaging, isPushConfigured } = require('./firebaseUtils');
 let pushConfigWarningShown = false;
-
-const normalizePrivateKey = (value) =>
-  value ? String(value).replace(/\\n/g, '\n') : '';
-
-const firebaseCredentials = () => ({
-  projectId: process.env.FIREBASE_PROJECT_ID,
-  clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-  privateKey: normalizePrivateKey(process.env.FIREBASE_PRIVATE_KEY),
-});
-
-const isPushConfigured = () => {
-  const creds = firebaseCredentials();
-  return Boolean(creds.projectId && creds.clientEmail && creds.privateKey);
-};
-
-const getFirebaseApp = () => {
-  if (!isPushConfigured()) return null;
-  if (firebaseApp) return firebaseApp;
-
-  const creds = firebaseCredentials();
-  firebaseApp = admin.initializeApp({
-    credential: admin.credential.cert(creds),
-  });
-  return firebaseApp;
-};
 
 const ensurePushTokenTable = async () => {
   await db.query(`
@@ -99,13 +72,17 @@ const sendPushToUser = async (userId, payload) => {
     return { sent: 0, reason: 'push_not_configured' };
   }
 
-  const app = getFirebaseApp();
+  const messaging = getMessaging();
   const tokens = await getUserPushTokens(userId);
+  if (!messaging) {
+    return { sent: 0, reason: 'push_not_configured' };
+  }
+
   if (tokens.length === 0) {
     return { sent: 0, reason: 'no_registered_tokens' };
   }
 
-  const result = await admin.messaging(app).sendEachForMulticast({
+  const result = await messaging.sendEachForMulticast({
     tokens,
     notification: {
       title: payload.title,
