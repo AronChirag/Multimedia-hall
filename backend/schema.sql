@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS bookings (
   college_name VARCHAR(100) NOT NULL,
   title VARCHAR(200) NOT NULL,
   purpose TEXT,
+  poster_data LONGBLOB,
   poster_file_path VARCHAR(255),
   poster_original_name VARCHAR(255),
   poster_mime_type VARCHAR(100),

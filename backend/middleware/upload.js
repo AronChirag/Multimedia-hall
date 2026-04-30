@@ -26,7 +26,7 @@ const createStorage = (folder) =>
 const imageMimeTypes = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/jpg']);
 
 const uploadPoster = multer({
-  storage: createStorage(posterDir),
+  storage: multer.memoryStorage(),
   limits: { fileSize: 5 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
     if (!imageMimeTypes.has(file.mimetype)) {

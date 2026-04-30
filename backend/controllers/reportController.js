@@ -1,7 +1,7 @@
 const db = require("../config/db");
 const PDFDocument = require("pdfkit");
 const ExcelJS = require("exceljs");
-const { logAudit, actionLogPath, ensureActionLogFile } = require("../utils/audit");
+const { logAudit, logError, actionLogPath, ensureActionLogFile } = require("../utils/audit");
 
 // ─── Helper: fetch bookings for report ───────────────────────────────────────
 async function fetchBookingsForReport(filters, userId = null) {
@@ -216,7 +216,7 @@ const generatePDF = async (req, res) => {
 
     doc.end();
   } catch (err) {
-    console.error("PDF generation error:", err);
+    logError("PDF generation error", err);
     res.status(500).json({ message: "Failed to generate PDF." });
   }
 };
@@ -296,7 +296,7 @@ const generateExcel = async (req, res) => {
     await workbook.xlsx.write(res);
     res.end();
   } catch (err) {
-    console.error("Excel generation error:", err);
+    logError("Excel generation error", err);
     res.status(500).json({ message: "Failed to generate Excel report." });
   }
 };
@@ -320,6 +320,7 @@ const getAnalytics = async (req, res) => {
 
     res.json({ totalByCollege, monthlyTrend });
   } catch (err) {
+    logError("Analytics error", err);
     res.status(500).json({ message: "Server error." });
   }
 };
@@ -340,7 +341,7 @@ const downloadActionLogs = async (req, res) => {
     res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
     return res.sendFile(actionLogPath);
   } catch (err) {
-    console.error("Action log download error:", err);
+    logError("Action log download error", err);
     return res.status(500).json({ message: "Failed to download action logs." });
   }
 };

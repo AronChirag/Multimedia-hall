@@ -40,6 +40,9 @@ const getTransporter = () => {
       user: process.env.MAIL_USER,
       pass: process.env.MAIL_PASS,
     },
+    tls: {
+      rejectUnauthorized: false,
+    },
   });
 
   return transporter;
@@ -47,8 +50,12 @@ const getTransporter = () => {
 
 const verifyTransportOnce = async () => {
   if (transportVerified) return;
-  await getTransporter().verify();
-  transportVerified = true;
+  try {
+    await getTransporter().verify();
+    transportVerified = true;
+  } catch (err) {
+    console.warn('Mail transport verification failed (will still attempt to send):', err.message);
+  }
 };
 
 const sendMailToRecipient = async ({ toEmail, subject, html }) => {
