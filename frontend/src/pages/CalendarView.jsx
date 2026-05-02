@@ -51,13 +51,7 @@ const CalendarView = () => {
 
   const todayDate = formatDateKey(new Date());
 
-  useEffect(() => {
-    const now = new Date();
-    const start = new Date(now.getFullYear(), now.getMonth(), 1);
-    const end = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-
-    fetchBookings(toDateParam(start), toDateParam(end));
-  }, []);
+  // fetchBookings will be automatically triggered by FullCalendar's datesSet callback on mount
 
   const fetchBookings = async (startDate, endDate) => {
     try {
@@ -78,6 +72,7 @@ const CalendarView = () => {
             booking.event_date.split('T')[0],
             booking.end_time
           ),
+          allDay: false,
           backgroundColor: color,
           borderColor: color,
           extendedProps: {
@@ -156,14 +151,20 @@ const CalendarView = () => {
             validRange={user?.role === 'college' ? { start: todayDate } : undefined}
 
             eventContent={(eventInfo) => {
-              const { title, start, end } = eventInfo.event;
+              const { title, start, extendedProps } = eventInfo.event;
 
               const startTime = start?.toLocaleTimeString([], {
                 hour: '2-digit',
                 minute: '2-digit',
               });
 
-              const endTime = end?.toLocaleTimeString([], {
+              // Construct a valid Date for the end time using extendedProps
+              const endObj = new Date(toLocalDateTime(
+                extendedProps.event_date.split('T')[0],
+                extendedProps.end_time
+              ));
+              
+              const endTime = endObj?.toLocaleTimeString([], {
                 hour: '2-digit',
                 minute: '2-digit',
               });
@@ -176,10 +177,13 @@ const CalendarView = () => {
                     borderRadius: '6px',
                     padding: '6px 8px',
                     fontSize: '11px',
+                    overflow: 'hidden',
+                    whiteSpace: 'nowrap',
+                    textOverflow: 'ellipsis',
                   }}
                 >
-                  <div>{title}</div>
-                  <div style={{ fontSize: '10px' }}>
+                  <div style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{title}</div>
+                  <div style={{ fontSize: '10px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                     {startTime} – {endTime}
                   </div>
                 </div>

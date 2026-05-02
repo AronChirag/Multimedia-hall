@@ -1,15 +1,79 @@
 const nodemailer = require('nodemailer');
-require('dotenv').config();
+const path = require('path');
 
-const transporter = nodemailer.createTransport({
-  host: process.env.MAIL_HOST,
-  port: parseInt(process.env.MAIL_PORT) || 587,
-  secure: false,
-  auth: {
-    user: process.env.MAIL_USER,
-    pass: process.env.MAIL_PASS,
-  },
-});
+require('dotenv').config({ path: path.resolve(__dirname, '..', '.env') });
+
+let transporter = null;
+let transportVerified = false;
+
+const normalizeEmail = (value) => String(value || '').trim().toLowerCase();
+
+const isValidEmail = (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizeEmail(value));
+
+const hasMailConfig = () =>
+  Boolean(
+    process.env.MAIL_HOST &&
+      process.env.MAIL_PORT &&
+      process.env.MAIL_USER &&
+      process.env.MAIL_PASS &&
+      process.env.MAIL_FROM
+  );
+
+const getTransporter = () => {
+  if (!hasMailConfig()) {
+    throw new Error('Mail configuration is incomplete.');
+  }
+
+  if (transporter) return transporter;
+
+  const port = Number.parseInt(process.env.MAIL_PORT, 10) || 587;
+  const secure =
+    process.env.MAIL_SECURE === 'true' ||
+    process.env.MAIL_SECURE === '1' ||
+    port === 465;
+
+  transporter = nodemailer.createTransport({
+    host: process.env.MAIL_HOST,
+    port,
+    secure,
+    auth: {
+      user: process.env.MAIL_USER,
+      pass: process.env.MAIL_PASS,
+    },
+    tls: {
+      rejectUnauthorized: false,
+    },
+  });
+
+  return transporter;
+};
+
+const verifyTransportOnce = async () => {
+  if (transportVerified) return;
+  try {
+    await getTransporter().verify();
+    transportVerified = true;
+  } catch (err) {
+    console.warn('Mail transport verification failed (will still attempt to send):', err.message);
+  }
+};
+
+const sendMailToRecipient = async ({ toEmail, subject, html }) => {
+  const normalizedRecipient = normalizeEmail(toEmail);
+  if (!isValidEmail(normalizedRecipient)) {
+    throw new Error(`Invalid recipient email: ${toEmail || '(empty)'}`);
+  }
+
+  await verifyTransportOnce();
+  await getTransporter().sendMail({
+    from: process.env.MAIL_FROM,
+    to: normalizedRecipient,
+    subject,
+    html,
+  });
+
+  return normalizedRecipient;
+};
 
 const sendStatusEmail = async (toEmail, userName, booking, status, adminNote) => {
   const isApproved = status === 'approved';
@@ -35,23 +99,53 @@ const sendStatusEmail = async (toEmail, userName, booking, status, adminNote) =>
           </table>
         </div>
 
-        ${!isApproved ? '<p>You may submit a new request for a different time slot.</p>' : '<p>Please ensure the auditorium is left in good condition after your event.</p>'}
+        ${!isApproved ? '<p>You may submit a new request for a different time slot.</p>' : '<p>Please ensure the auditorium is left in good condition after your event.</p><p>After the event ends, upload your post-event report from the <strong>My Bookings</strong> page.</p>'}
         <p style="color: #6b7280; font-size: 12px; margin-top: 30px;">This is an automated message. Do not reply.</p>
       </div>
     </div>
   `;
 
-  try {
-    await transporter.sendMail({
-      from: process.env.MAIL_FROM,
-      to: toEmail,
-      subject: `Booking ${isApproved ? 'Approved' : 'Rejected'}: ${booking.title}`,
-      html,
-    });
-    console.log(`Email sent to ${toEmail}`);
-  } catch (err) {
-    console.error('Email send failed:', err.message);
-  }
+  const recipient = await sendMailToRecipient({
+    toEmail,
+    subject: `Booking ${isApproved ? 'Approved' : 'Rejected'}: ${booking.title}`,
+    html,
+  });
+  console.log(`Email sent to ${recipient}`);
+};
+
+const sendAdminBookingRequestEmail = async (toEmail, adminName, booking, requester) => {
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <div style="background: #1e3a5f; padding: 20px; text-align: center;">
+        <h1 style="color: white; margin: 0;">Auditorium Booking System</h1>
+      </div>
+      <div style="padding: 30px; background: #f9fafb; border: 1px solid #e5e7eb;">
+        <p>Dear <strong>${adminName || 'Admin'}</strong>,</p>
+        <p>A new auditorium booking request is waiting for review.</p>
+
+        <div style="background: white; border-radius: 8px; padding: 20px; margin: 20px 0; border-left: 4px solid #1e3a5f;">
+          <table style="width: 100%; border-collapse: collapse;">
+            <tr><td style="padding: 6px 0; color: #6b7280;">Event</td><td><strong>${booking.title}</strong></td></tr>
+            <tr><td style="padding: 6px 0; color: #6b7280;">College</td><td><strong>${booking.college_name}</strong></td></tr>
+            <tr><td style="padding: 6px 0; color: #6b7280;">Requested by</td><td><strong>${requester.name || booking.college_name}</strong> (${requester.email})</td></tr>
+            <tr><td style="padding: 6px 0; color: #6b7280;">Date</td><td><strong>${new Date(booking.event_date).toDateString()}</strong></td></tr>
+            <tr><td style="padding: 6px 0; color: #6b7280;">Time</td><td><strong>${booking.start_time} – ${booking.end_time}</strong></td></tr>
+            ${booking.purpose ? `<tr><td style="padding: 6px 0; color: #6b7280;">Purpose</td><td>${booking.purpose}</td></tr>` : ''}
+          </table>
+        </div>
+
+        <p>Please open the admin requests page to approve or reject this request.</p>
+        <p style="color: #6b7280; font-size: 12px; margin-top: 30px;">This is an automated message. Do not reply.</p>
+      </div>
+    </div>
+  `;
+
+  const recipient = await sendMailToRecipient({
+    toEmail,
+    subject: `New Booking Request: ${booking.title}`,
+    html,
+  });
+  console.log(`Admin booking request email sent to ${recipient} for booking ${booking.id}`);
 };
 
 const sendPostReportReminderEmail = async (toEmail, userName, booking, uploadPageUrl) => {
@@ -84,18 +178,12 @@ const sendPostReportReminderEmail = async (toEmail, userName, booking, uploadPag
     </div>
   `;
 
-  try {
-    await transporter.sendMail({
-      from: process.env.MAIL_FROM,
-      to: toEmail,
-      subject: `Reminder: Upload post-event report for ${booking.title}`,
-      html,
-    });
-    console.log(`Reminder email sent to ${toEmail} for booking ${booking.id}`);
-  } catch (err) {
-    console.error('Reminder email send failed:', err.message);
-    throw err;
-  }
+  const recipient = await sendMailToRecipient({
+    toEmail,
+    subject: `Reminder: Upload post-event report for ${booking.title}`,
+    html,
+  });
+  console.log(`Reminder email sent to ${recipient} for booking ${booking.id}`);
 };
 
 const sendPasswordResetEmail = async (toEmail, userName, temporaryPassword) => {
@@ -119,12 +207,20 @@ const sendPasswordResetEmail = async (toEmail, userName, temporaryPassword) => {
     </div>
   `;
 
-  await transporter.sendMail({
-    from: process.env.MAIL_FROM,
-    to: toEmail,
+  const recipient = await sendMailToRecipient({
+    toEmail,
     subject: 'Temporary Password - Auditorium Booking System',
     html,
   });
+  console.log(`Password reset email sent to ${recipient}`);
 };
 
-module.exports = { sendStatusEmail, sendPostReportReminderEmail, sendPasswordResetEmail };
+module.exports = {
+  hasMailConfig,
+  isValidEmail,
+  normalizeEmail,
+  sendStatusEmail,
+  sendAdminBookingRequestEmail,
+  sendPostReportReminderEmail,
+  sendPasswordResetEmail,
+};

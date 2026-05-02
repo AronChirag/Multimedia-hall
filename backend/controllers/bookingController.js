@@ -1,9 +1,17 @@
 const db = require('../config/db');
 const fs = require('fs');
 const path = require('path');
-const { sendStatusEmail } = require('../utils/mailer');
-const { sendBookingStatusPush } = require('../utils/pushNotifications');
-const { logAudit } = require('../utils/audit');
+const {
+  normalizeEmail,
+  isValidEmail,
+  sendStatusEmail,
+  sendAdminBookingRequestEmail,
+} = require('../utils/mailer');
+const {
+  sendBookingStatusPush,
+  sendNewBookingRequestPush,
+} = require('../utils/pushNotifications');
+const { logAudit, logError } = require('../utils/audit');
 
 const uploadsRoot = path.join(__dirname, '..', 'uploads');
 const bookingListSelect = `
@@ -30,7 +38,11 @@ const bookingListSelect = `
   CASE
     WHEN b.event_report_data IS NOT NULL OR b.event_report_file_path IS NOT NULL THEN 1
     ELSE 0
-  END AS has_event_report
+  END AS has_event_report,
+  CASE
+    WHEN b.poster_data IS NOT NULL OR b.poster_file_path IS NOT NULL THEN 1
+    ELSE 0
+  END AS has_poster
 `;
 
 const toDateKey = (dateValue) => {
@@ -44,18 +56,93 @@ const toDateKey = (dateValue) => {
   return String(dateValue).split('T')[0];
 };
 
-const toApiPosterUrl = (posterPath) => (posterPath ? `/uploads/${posterPath.replace(/\\/g, '/')}` : null);
+const toApiPosterUrl = (booking) => {
+  if (Number(booking.has_poster || 0) > 0 || booking.poster_file_path) {
+    return `/api/bookings/${booking.id}/poster`;
+  }
+  return null;
+};
 
 const withFileLinks = (booking) => ({
   ...booking,
-  poster_url: toApiPosterUrl(booking.poster_file_path),
+  poster_url: toApiPosterUrl(booking),
   event_report_url:
     Number(booking.has_event_report || 0) > 0 || booking.event_report_file_path
       ? `/api/bookings/${booking.id}/report`
       : null,
 });
 
-// ─── College User: Submit a booking request ─────────────────────────────────
+const sendBookingDecisionNotifications = async (booking, status, adminNote) => {
+  const notificationTasks = [];
+  const recipientEmail = normalizeEmail(booking.email);
+
+  if (isValidEmail(recipientEmail)) {
+    notificationTasks.push(
+      sendStatusEmail(
+        recipientEmail,
+        booking.user_name || booking.college_name,
+        booking,
+        status,
+        adminNote
+      )
+    );
+  } else {
+    console.warn(
+      `Skipping booking status email for booking ${booking.id}: invalid user email "${booking.email || ''}"`
+    );
+  }
+
+  notificationTasks.push(sendBookingStatusPush(booking.user_id, booking, status));
+
+  const results = await Promise.allSettled(notificationTasks);
+  results.forEach((result) => {
+    if (result.status === 'rejected') {
+      console.error('Booking status notification failed:', result.reason?.message || result.reason);
+    }
+  });
+};
+
+const sendNewBookingNotificationsToAdmins = async (booking, requester) => {
+  const [adminRows] = await db.query(
+    `SELECT id, name, email
+     FROM users
+     WHERE role = 'admin'`
+  );
+
+  if (adminRows.length === 0) {
+    console.warn(`No admin users found for booking request notification ${booking.id}.`);
+    return;
+  }
+
+  const notificationTasks = [];
+  adminRows.forEach((adminUser) => {
+    const recipientEmail = normalizeEmail(adminUser.email);
+    if (isValidEmail(recipientEmail)) {
+      notificationTasks.push(
+        sendAdminBookingRequestEmail(recipientEmail, adminUser.name, booking, requester)
+      );
+    } else {
+      console.warn(
+        `Skipping admin booking email for user ${adminUser.id}: invalid email "${adminUser.email || ''}"`
+      );
+    }
+  });
+
+  notificationTasks.push(
+    sendNewBookingRequestPush(
+      adminRows.map((adminUser) => adminUser.id),
+      booking
+    )
+  );
+
+  const results = await Promise.allSettled(notificationTasks);
+  results.forEach((result) => {
+    if (result.status === 'rejected') {
+      console.error('New booking admin notification failed:', result.reason?.message || result.reason);
+    }
+  });
+};
+
 const createBooking = async (req, res) => {
   const { title, purpose, event_date, start_time, end_time } = req.body;
   const { id: user_id, college_name } = req.user;
@@ -106,15 +193,16 @@ const createBooking = async (req, res) => {
     }
 
     const [result] = await db.query(
-      `INSERT INTO bookings 
-      (user_id, college_name, title, purpose, poster_file_path, poster_original_name, poster_mime_type, poster_uploaded_at, event_date, start_time, end_time) 
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO bookings
+       (user_id, college_name, title, purpose, poster_data, poster_file_path, poster_original_name, poster_mime_type, poster_uploaded_at, event_date, start_time, end_time)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         user_id,
         college_name,
         title,
         purpose,
-        posterFile ? `posters/${posterFile.filename}` : null,
+        posterFile ? posterFile.buffer : null,
+        null,
         posterFile ? posterFile.originalname : null,
         posterFile ? posterFile.mimetype : null,
         posterFile ? new Date() : null,
@@ -124,24 +212,49 @@ const createBooking = async (req, res) => {
       ]
     );
 
+    const createdBooking = {
+      id: result.insertId,
+      user_id,
+      college_name,
+      title,
+      purpose,
+      event_date: normalizedEventDate,
+      start_time,
+      end_time,
+    };
+
+    const requester = {
+      id: user_id,
+      name: req.user.name,
+      email: req.user.email,
+    };
+
     await logAudit(
       'BOOKING_CREATED',
       user_id,
       result.insertId,
-      `${college_name} submitted booking for ${normalizedEventDate}`
+      `${req.user.email || college_name} requested "${title}" for ${normalizedEventDate}`
     );
 
-    res.status(201).json({
+    setImmediate(() => {
+      sendNewBookingNotificationsToAdmins(createdBooking, requester).catch((notificationErr) => {
+        console.error(
+          `New booking admin notifications failed for booking ${result.insertId}:`,
+          notificationErr.message
+        );
+      });
+    });
+
+    return res.status(201).json({
       message: 'Booking request submitted successfully.',
       bookingId: result.insertId,
     });
   } catch (err) {
-    console.error('Create booking error:', err);
-    res.status(500).json({ message: 'Server error.' });
+    logError('Create booking error', err);
+    return res.status(500).json({ message: 'Server error.' });
   }
 };
 
-// ─── College User: Get own bookings ─────────────────────────────────────────
 const getMyBookings = async (req, res) => {
   try {
     const [rows] = await db.query(
@@ -151,14 +264,13 @@ const getMyBookings = async (req, res) => {
        ORDER BY b.event_date DESC`,
       [req.user.id]
     );
-    res.json(rows.map(withFileLinks));
+    return res.json(rows.map(withFileLinks));
   } catch (err) {
-    console.error('Get my bookings error:', err);
-    res.status(500).json({ message: 'Server error.' });
+    logError('Get my bookings error', err);
+    return res.status(500).json({ message: 'Server error.' });
   }
 };
 
-// ─── Common: Get approved bookings ──────────────────────────────────────────
 const getApprovedBookings = async (req, res) => {
   const { start, end } = req.query;
   const startDate = String(start || '').split('T')[0];
@@ -175,23 +287,26 @@ const getApprovedBookings = async (req, res) => {
               CASE
                 WHEN event_report_data IS NOT NULL OR event_report_file_path IS NOT NULL THEN 1
                 ELSE 0
-              END AS has_event_report
+              END AS has_event_report,
+              CASE
+                WHEN poster_data IS NOT NULL OR poster_file_path IS NOT NULL THEN 1
+                ELSE 0
+              END AS has_poster
        FROM bookings
        WHERE status = 'approved'
          AND event_date >= ?
          AND event_date < ?
-        ORDER BY event_date ASC`,
+       ORDER BY event_date ASC`,
       [startDate, endDate]
     );
 
-    res.json(rows.map(withFileLinks));
+    return res.json(rows.map(withFileLinks));
   } catch (err) {
-    console.error('Get approved bookings error:', err);
-    res.status(500).json({ message: 'Server error.' });
+    logError('Get approved bookings error', err);
+    return res.status(500).json({ message: 'Server error.' });
   }
 };
 
-// ─── Admin: Get all bookings ────────────────────────────────────────────────
 const getAllBookings = async (req, res) => {
   const { college, status, from, to, page, limit } = req.query;
   const pageNum = parseInt(page, 10) || 1;
@@ -236,23 +351,22 @@ const getAllBookings = async (req, res) => {
   try {
     const [[{ total }]] = await db.query(countQuery, params);
     const [rows] = await db.query(dataQuery, [...params, limitNum, offset]);
-    
-    res.json({
+
+    return res.json({
       data: rows.map(withFileLinks),
       meta: {
         total,
         page: pageNum,
         limit: limitNum,
-        totalPages: Math.ceil(total / limitNum)
-      }
+        totalPages: Math.ceil(total / limitNum),
+      },
     });
   } catch (err) {
-    console.error('Get all bookings error:', err);
-    res.status(500).json({ message: 'Server error.' });
+    logError('Get all bookings error', err);
+    return res.status(500).json({ message: 'Server error.' });
   }
 };
 
-// ─── Admin: Get pending bookings ────────────────────────────────────────────
 const getPendingBookings = async (req, res) => {
   try {
     const [rows] = await db.query(
@@ -262,16 +376,13 @@ const getPendingBookings = async (req, res) => {
        WHERE b.status = 'pending'
        ORDER BY b.created_at ASC`
     );
-    res.json(rows.map(withFileLinks));
+    return res.json(rows.map(withFileLinks));
   } catch (err) {
-    console.error('Get pending bookings error:', err);
-    res.status(500).json({ message: 'Server error.' });
+    logError('Get pending bookings error', err);
+    return res.status(500).json({ message: 'Server error.' });
   }
 };
 
-
-
-// ─── College User: Upload post-event report PDF ──────────────────────────────
 const uploadEventReport = async (req, res) => {
   const { id } = req.params;
   const reportFile = req.file;
@@ -336,14 +447,16 @@ const uploadEventReport = async (req, res) => {
       `Event report uploaded for booking ${id}`
     );
 
-    res.json({ message: 'Event report uploaded successfully.', event_report_url: `/api/bookings/${id}/report` });
+    return res.json({
+      message: 'Event report uploaded successfully.',
+      event_report_url: `/api/bookings/${id}/report`,
+    });
   } catch (err) {
-    console.error('Upload event report error:', err);
-    res.status(500).json({ message: 'Server error.' });
+    logError('Upload event report error', err);
+    return res.status(500).json({ message: 'Server error.' });
   }
 };
 
-// ─── Admin/Owner: View event report PDF ──────────────────────────────────────
 const getEventReport = async (req, res) => {
   const { id } = req.params;
 
@@ -366,7 +479,6 @@ const getEventReport = async (req, res) => {
 
     const isOwner = req.user.id === booking.user_id;
     const isAdmin = ['admin', 'supervisor'].includes(req.user.role);
-
     const isApproved = booking.status === 'approved';
 
     if (!isAdmin && !isOwner && !isApproved) {
@@ -394,14 +506,57 @@ const getEventReport = async (req, res) => {
       return res.status(404).json({ message: 'Stored event report file not found.' });
     }
 
-    res.sendFile(filePath);
+    return res.sendFile(filePath);
   } catch (err) {
-    console.error('Get event report error:', err);
-    res.status(500).json({ message: 'Server error.' });
+    logError('Get event report error', err);
+    return res.status(500).json({ message: 'Server error.' });
   }
 };
 
-// ─── College User: Cancel own pending booking ─────────────────────────────────
+const getPoster = async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const [rows] = await db.query(
+      `SELECT id, poster_data, poster_file_path, poster_original_name, poster_mime_type
+       FROM bookings
+       WHERE id = ?`,
+      [id]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ message: 'Booking not found.' });
+    }
+
+    const booking = rows[0];
+    if (!booking.poster_data && !booking.poster_file_path) {
+      return res.status(404).json({ message: 'Poster not uploaded.' });
+    }
+
+    res.setHeader('Content-Type', booking.poster_mime_type || 'application/octet-stream');
+    res.setHeader(
+      'Content-Disposition',
+      `inline; filename="${encodeURIComponent(
+        booking.poster_original_name || `poster-${id}`
+      )}"`
+    );
+
+    if (booking.poster_data) {
+      return res.send(booking.poster_data);
+    }
+
+    const filePath = path.join(uploadsRoot, booking.poster_file_path || '');
+    if (!booking.poster_file_path || !fs.existsSync(filePath)) {
+      return res.status(404).json({ message: 'Stored poster file not found.' });
+    }
+
+    return res.sendFile(filePath);
+  } catch (err) {
+    logError('Get poster error', err);
+    return res.status(500).json({ message: 'Server error.' });
+  }
+};
+
 const cancelMyBooking = async (req, res) => {
   const { id } = req.params;
 
@@ -445,14 +600,13 @@ const cancelMyBooking = async (req, res) => {
       `Booking "${booking.title}" cancelled by requester`
     );
 
-    res.json({ message: 'Booking request cancelled successfully.' });
+    return res.json({ message: 'Booking request cancelled successfully.' });
   } catch (err) {
-    console.error('Cancel booking error:', err);
-    res.status(500).json({ message: 'Server error.' });
+    logError('Cancel booking error', err);
+    return res.status(500).json({ message: 'Server error.' });
   }
 };
 
-// ─── Admin: Update booking status ───────────────────────────────────────────
 const updateBookingStatus = async (req, res) => {
   const { id } = req.params;
   const { status, admin_note } = req.body;
@@ -479,7 +633,6 @@ const updateBookingStatus = async (req, res) => {
 
     const booking = bookingRows[0];
 
-    // Conflict check if approving
     if (status === 'approved') {
       const [conflicts] = await db.query(
         `SELECT id
@@ -499,43 +652,34 @@ const updateBookingStatus = async (req, res) => {
       }
     }
 
-    // Update booking
     await db.query(
       'UPDATE bookings SET status = ?, admin_note = ? WHERE id = ?',
       [status, admin_note || null, id]
     );
 
-    // Send email (optional)
-    if (booking.email) {
-      await sendStatusEmail(
-      booking.email,
-      booking.user_name || booking.college_name,
-      booking,
-      status,
-      admin_note
-    );
-    }
-
-    try {
-      await sendBookingStatusPush(booking.user_id, booking, status);
-    } catch (pushErr) {
-      console.error('Booking status push failed:', pushErr.message);
-    }
-
-    // Audit log
     await logAudit(
       'BOOKING_STATUS_UPDATED',
       req.user.id,
       id,
-      `Booking ${id} marked as ${status}`
+      `${req.user.email || 'admin'} ${status === 'approved' ? 'accepted' : 'rejected'} "${booking.title}" requested by ${booking.college_name}`
     );
 
     res.json({
       message: `Booking ${status} successfully.`,
+      notificationStatus: 'queued',
+    });
+
+    setImmediate(() => {
+      sendBookingDecisionNotifications(booking, status, admin_note).catch((notificationErr) => {
+        console.error(
+          `Booking status notifications failed for booking ${id}:`,
+          notificationErr.message
+        );
+      });
     });
   } catch (err) {
-    console.error('Update booking error:', err);
-    res.status(500).json({ message: 'Server error.' });
+    logError('Update booking error', err);
+    return res.status(500).json({ message: 'Server error.' });
   }
 };
 
@@ -549,4 +693,5 @@ module.exports = {
   updateBookingStatus,
   uploadEventReport,
   getEventReport,
+  getPoster,
 };

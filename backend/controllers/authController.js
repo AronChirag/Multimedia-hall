@@ -2,7 +2,8 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const db = require('../config/db');
-const { sendPasswordResetEmail } = require('../utils/mailer');
+const { normalizeEmail, isValidEmail, sendPasswordResetEmail } = require('../utils/mailer');
+const { logError } = require('../utils/audit');
 const {
   saveUserPushToken,
   removeUserPushToken,
@@ -65,7 +66,7 @@ const login = async (req, res) => {
     req.auditAction = 'LOGIN_ERROR';
     req.auditActor = { email: normalizedEmail, role: 'anonymous' };
     req.auditDetails = 'Login request failed';
-    console.error('Login error:', err);
+    logError('Login error', err);
     res.status(500).json({ message: 'Server error.' });
   }
 };
@@ -125,7 +126,7 @@ const supervisorLogin = async (req, res) => {
     req.auditAction = 'SUPERVISOR_LOGIN_ERROR';
     req.auditActor = { email: normalizedEmail, role: 'anonymous' };
     req.auditDetails = 'Supervisor login request failed';
-    console.error('Supervisor login error:', err);
+    logError('Supervisor login error', err);
     return res.status(500).json({ message: 'Server error.' });
   }
 };
@@ -139,6 +140,7 @@ const getMe = async (req, res) => {
     if (rows.length === 0) return res.status(404).json({ message: 'User not found.' });
     res.json(rows[0]);
   } catch (err) {
+    logError('Get current user error', err);
     res.status(500).json({ message: 'Server error.' });
   }
 };
@@ -171,13 +173,19 @@ const forgotPassword = async (req, res) => {
     }
 
     const user = rows[0];
+    const recipientEmail = normalizeEmail(user.email);
+    if (!isValidEmail(recipientEmail)) {
+      console.warn(`Password reset skipped: invalid email for user ${user.id}`);
+      return res.status(400).json({ message: 'No valid email is registered for this account.' });
+    }
+
     const temporaryPassword = generateTemporaryPassword();
     const passwordHash = await bcrypt.hash(temporaryPassword, 10);
 
     await db.query('UPDATE users SET password = ? WHERE id = ?', [passwordHash, user.id]);
 
     try {
-      await sendPasswordResetEmail(user.email, user.name, temporaryPassword);
+      await sendPasswordResetEmail(recipientEmail, user.name, temporaryPassword);
     } catch (mailErr) {
       await db.query('UPDATE users SET password = ? WHERE id = ?', [user.password, user.id]);
       throw mailErr;
@@ -191,7 +199,7 @@ const forgotPassword = async (req, res) => {
 
     return res.json({ message: 'If the email exists, a temporary password has been sent.' });
   } catch (err) {
-    console.error('Forgot password error:', err);
+    logError('Forgot password error', err);
     return res.status(500).json({ message: 'Unable to process password reset right now.' });
   }
 };
@@ -206,7 +214,7 @@ const registerPushToken = async (req, res) => {
     await saveUserPushToken(req.user.id, token, req.headers['user-agent'] || null);
     return res.json({ message: 'Push token registered.' });
   } catch (err) {
-    console.error('Register push token error:', err);
+    logError('Register push token error', err);
     return res.status(500).json({ message: 'Failed to register push token.' });
   }
 };
@@ -217,7 +225,7 @@ const unregisterPushToken = async (req, res) => {
     await removeUserPushToken(req.user.id, token || null);
     return res.json({ message: 'Push token removed.' });
   } catch (err) {
-    console.error('Unregister push token error:', err);
+    logError('Unregister push token error', err);
     return res.status(500).json({ message: 'Failed to unregister push token.' });
   }
 };
@@ -255,7 +263,7 @@ const changePassword = async (req, res) => {
 
     return res.json({ message: 'Password changed successfully.' });
   } catch (err) {
-    console.error('Change password error:', err);
+    logError('Change password error', err);
     return res.status(500).json({ message: 'Unable to change password right now.' });
   }
 };

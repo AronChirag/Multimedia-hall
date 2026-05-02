@@ -38,18 +38,59 @@ const ensureFirebaseApp = () => {
   return initializeApp(getFirebaseConfig());
 };
 
-const getStoredToken = () => localStorage.getItem(TOKEN_STORAGE_KEY);
+const getCurrentAuthUserId = () => {
+  try {
+    const rawAuthSession = localStorage.getItem('auth_session');
+    if (!rawAuthSession) return null;
+    const parsedAuthSession = JSON.parse(rawAuthSession);
+    return parsedAuthSession?.user?.id ? String(parsedAuthSession.user.id) : null;
+  } catch {
+    return null;
+  }
+};
 
-const setStoredToken = (token) => {
+const getStoredTokenRecord = () => {
+  const storedValue = localStorage.getItem(TOKEN_STORAGE_KEY);
+  if (!storedValue) return { token: null, userId: null };
+
+  try {
+    const parsedValue = JSON.parse(storedValue);
+    if (parsedValue?.token) {
+      return {
+        token: parsedValue.token,
+        userId: parsedValue.userId ? String(parsedValue.userId) : null,
+      };
+    }
+  } catch {
+    return { token: storedValue, userId: null };
+  }
+
+  return { token: storedValue, userId: null };
+};
+
+const getStoredToken = () => getStoredTokenRecord().token;
+
+const setStoredToken = (token, userId = getCurrentAuthUserId()) => {
   if (token) {
-    localStorage.setItem(TOKEN_STORAGE_KEY, token);
+    localStorage.setItem(
+      TOKEN_STORAGE_KEY,
+      JSON.stringify({
+        token,
+        userId: userId ? String(userId) : null,
+      })
+    );
     return;
   }
   localStorage.removeItem(TOKEN_STORAGE_KEY);
 };
 
-export const enablePushNotifications = async ({ requestPermission = true } = {}) => {
-  if (typeof window === 'undefined' || !('serviceWorker' in navigator) || !('Notification' in window)) {
+export const enablePushNotifications = async ({ requestPermission = true, userId = null } = {}) => {
+  if (
+    typeof window === 'undefined' ||
+    !window.isSecureContext ||
+    !('serviceWorker' in navigator) ||
+    !('Notification' in window)
+  ) {
     return;
   }
 
@@ -75,10 +116,11 @@ export const enablePushNotifications = async ({ requestPermission = true } = {})
   });
   if (!token) return;
 
-  const currentStoredToken = getStoredToken();
-  if (currentStoredToken !== token) {
+  const currentStoredToken = getStoredTokenRecord();
+  const currentUserId = userId ? String(userId) : getCurrentAuthUserId();
+  if (currentStoredToken.token !== token || currentStoredToken.userId !== currentUserId) {
     await registerPushToken(token);
-    setStoredToken(token);
+    setStoredToken(token, currentUserId);
   }
 
   if (!foregroundUnsubscribe) {

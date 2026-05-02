@@ -1,7 +1,7 @@
 const db = require("../config/db");
 const PDFDocument = require("pdfkit");
 const ExcelJS = require("exceljs");
-const { logAudit, actionLogPath, ensureActionLogFile } = require("../utils/audit");
+const { logAudit, logError, actionLogPath, ensureActionLogFile } = require("../utils/audit");
 
 // ─── Helper: fetch bookings for report ───────────────────────────────────────
 async function fetchBookingsForReport(filters, userId = null) {
@@ -49,6 +49,7 @@ async function fetchBookingsForReport(filters, userId = null) {
 }
 
 // ─── Generate PDF report ──────────────────────────────────────────────────────
+// ─── Generate PDF report ──────────────────────────────────────────────────────
 const generatePDF = async (req, res) => {
   const isAdmin = ["admin", "supervisor"].includes(req.user.role);
   const filters = req.query;
@@ -58,86 +59,128 @@ const generatePDF = async (req, res) => {
     const bookings = await fetchBookingsForReport(filters, userId);
     const apiBaseUrl = `${req.protocol}://${req.get("host")}`;
 
-    const doc = new PDFDocument({ margin: 50 });
+    const doc = new PDFDocument({ 
+      margin: 40, 
+      layout: 'landscape',
+      size: 'A4'
+    });
+
     res.setHeader("Content-Type", "application/pdf");
-    res.setHeader(
-      "Content-Disposition",
-      "attachment; filename=bookings_report.pdf",
-    );
+    res.setHeader("Content-Disposition", "attachment; filename=bookings_report.pdf");
     doc.pipe(res);
 
     // Header
     doc.fontSize(20).text("Auditorium Booking Report", { align: "center" });
-    doc
-      .fontSize(10)
-      .text(`Generated on: ${new Date().toLocaleString()}`, {
-        align: "center",
-      });
-    if (!isAdmin)
-      doc.text(`College: ${req.user.college_name}`, { align: "center" });
+    doc.fontSize(10).text(`Generated on: ${new Date().toLocaleString()}`, { align: "center" });
+    if (!isAdmin) doc.text(`College: ${req.user.college_name}`, { align: "center" });
     doc.moveDown(2);
 
-    // ── Table setup ──────────────────────────────────────────────────────────
-    const headers = ["#", "College", "Title", "Description", "Date", "Time", "Status"];
-    const colWidths = [30, 85, 90, 110, 60, 80, 55];
-    const ROW_HEIGHT = 20;
-    const TABLE_LEFT = 50;
-    const TABLE_RIGHT = TABLE_LEFT + colWidths.reduce((a, b) => a + b, 0); // 560
+    // ── Table Configuration ─────────────────────────────────────────────────
+    const pageWidth = doc.page.width;
+    const leftMargin = 50;                    // Increased a bit for balance
+    const rightMargin = 50;
+    const availableWidth = pageWidth - leftMargin - rightMargin;
 
-    // ── Helper: draw one row at a fixed Y ────────────────────────────────────
-    const drawRow = (cols, y, bold = false) => {
+    const headers = [
+      "Sl no", "College", "Title", "Purpose", "Date", 
+      "Start Time", "End Time", "Status", "Poster Link", "Post-Event Report Link"
+    ];
+
+    // Fluid Column Widths
+    const colWidths = [
+      35,   // Sl no
+      85,   // College
+      0,    // Title     → will be calculated (flexible)
+      0,    // Purpose   → will be calculated (flexible)
+      68,   // Date
+      62,   // Start Time
+      62,   // End Time
+      65,   // Status
+      78,   // Poster Link
+      105   // Report Link
+    ];
+
+    // Calculate flexible widths for Title & Purpose
+    const fixedWidth = colWidths.reduce((sum, w) => sum + (w || 0), 0);
+    const remainingWidth = availableWidth - fixedWidth;
+    const flexibleEach = Math.floor(remainingWidth / 2); // Equal share for Title & Purpose
+
+    colWidths[2] = flexibleEach;      // Title
+    colWidths[3] = flexibleEach - 5;  // Purpose (slightly smaller)
+
+    const totalTableWidth = colWidths.reduce((a, b) => a + b, 0);
+    const TABLE_LEFT = leftMargin + Math.floor((availableWidth - totalTableWidth) / 2); // Center table
+
+    const ROW_HEIGHT = 22;
+    const TABLE_RIGHT = TABLE_LEFT + totalTableWidth;
+
+    // ── Helper: Draw Row ─────────────────────────────────────────────────────
+    const drawRow = (cols, y, isHeader = false) => {
       let x = TABLE_LEFT;
-      doc.font(bold ? "Helvetica-Bold" : "Helvetica").fontSize(bold ? 10 : 9);
+      const fontSize = isHeader ? 9 : 8;
+      const font = isHeader ? "Helvetica-Bold" : "Helvetica";
+
+      doc.font(font).fontSize(fontSize);
+
       cols.forEach((col, i) => {
-        doc.fillColor(bold ? "white" : "#111827");
-        doc.text(
-          String(col ?? "—"),
-          x + 4, // 4px inner padding
-          y + 4, // 4px top padding
-          {
-            width: colWidths[i] - 8,
-            height: ROW_HEIGHT - 4,
-            align: "left",
-            lineBreak: false, // ← KEY: prevents cursor from dropping down
-          },
-        );
+        let textStr = String(col ?? "—");
+        let linkUrl = null;
+
+        if (typeof col === "object" && col !== null) {
+          textStr = col.text || "—";
+          linkUrl = col.link;
+        }
+
+        const textOpts = {
+          width: colWidths[i] - 8,
+          align: "left",
+          lineBreak: true,           // Allow wrapping for long text
+        };
+
+        if (linkUrl && !isHeader) {
+          doc.fillColor("#1d4ed8").underline(true);
+          textOpts.link = linkUrl;
+        } else {
+          doc.fillColor(isHeader ? "white" : "#111827");
+        }
+
+        doc.text(textStr, x + 4, y + 5, textOpts);
         x += colWidths[i];
       });
     };
 
-    // ── Helper: draw row background + bottom border ───────────────────────────
+    // ── Helper: Draw Row Background + Border ────────────────────────────────
     const drawRowBg = (y, isHeader = false, isEven = false) => {
+      const width = TABLE_RIGHT - TABLE_LEFT;
+
       if (isHeader) {
-        doc
-          .rect(TABLE_LEFT, y, TABLE_RIGHT - TABLE_LEFT, ROW_HEIGHT)
-          .fill("#1e3a5f");
+        doc.rect(TABLE_LEFT, y, width, ROW_HEIGHT).fill("#1e3a5f");
       } else if (isEven) {
-        doc
-          .rect(TABLE_LEFT, y, TABLE_RIGHT - TABLE_LEFT, ROW_HEIGHT)
-          .fill("#f0f4f8");
+        doc.rect(TABLE_LEFT, y, width, ROW_HEIGHT).fill("#f8fafc");
       }
-      // bottom border
-      doc
-        .moveTo(TABLE_LEFT, y + ROW_HEIGHT)
-        .lineTo(TABLE_RIGHT, y + ROW_HEIGHT)
-        .strokeColor("#d1d5db")
-        .lineWidth(0.5)
-        .stroke();
+
+      // Bottom border
+      doc.moveTo(TABLE_LEFT, y + ROW_HEIGHT)
+         .lineTo(TABLE_RIGHT, y + ROW_HEIGHT)
+         .strokeColor("#d1d5db")
+         .lineWidth(0.6)
+         .stroke();
     };
 
-    // ── Draw header row ───────────────────────────────────────────────────────
+    // ── Draw Table ───────────────────────────────────────────────────────────
     let currentY = doc.y;
+
+    // Header Row
     drawRowBg(currentY, true);
     drawRow(headers, currentY, true);
     currentY += ROW_HEIGHT;
 
-    // ── Draw data rows ────────────────────────────────────────────────────────
+    // Data Rows
     bookings.forEach((b, idx) => {
-      // New page if near bottom
-      if (currentY + ROW_HEIGHT > 750) {
+      if (currentY + ROW_HEIGHT > 550) {
         doc.addPage();
         currentY = 50;
-        // Redraw header on new page
+
         drawRowBg(currentY, true);
         drawRow(headers, currentY, true);
         currentY += ROW_HEIGHT;
@@ -146,98 +189,37 @@ const generatePDF = async (req, res) => {
       const isEven = idx % 2 === 0;
       drawRowBg(currentY, false, isEven);
 
+      const posterUrl = b.poster_file_path
+        ? `${apiBaseUrl}/uploads/${b.poster_file_path.replace(/\\/g, "/")}`
+        : null;
+
+      const reportUrl = Number(b.has_event_report || 0) > 0
+        ? `${apiBaseUrl}/api/bookings/${b.id}/report`
+        : null;
+
       const cols = [
         idx + 1,
-        b.college_name,
-        b.title,
+        b.college_name || "—",
+        b.title || "—",
         b.purpose || "—",
         b.event_date,
-        `${b.start_time} - ${b.end_time}`,
-        b.status.toUpperCase(),
+        b.start_time || "—",
+        b.end_time || "—",
+        b.status?.toUpperCase() || "—",
+        posterUrl ? { text: "View Poster", link: posterUrl } : "—",
+        reportUrl ? { text: "View Report", link: reportUrl } : "—",
       ];
 
       drawRow(cols, currentY);
       currentY += ROW_HEIGHT;
     });
 
-    // Advance the doc cursor past the table so doc.end() renders correctly
-    doc.moveDown();
-    doc.text("", TABLE_LEFT, currentY);
-
-    const bookingsWithFiles = bookings.filter(
-      (b) => b.poster_file_path || Number(b.has_event_report || 0) > 0,
-    );
-
-    if (bookingsWithFiles.length > 0) {
-      if (currentY > 660) {
-        doc.addPage();
-        currentY = 50;
-      } else {
-        currentY += 20;
-      }
-
-      doc
-        .font("Helvetica-Bold")
-        .fontSize(12)
-        .fillColor("#111827")
-        .text("Attachment links", TABLE_LEFT, currentY);
-      currentY += 18;
-
-      bookingsWithFiles.forEach((b, index) => {
-        if (currentY > 760) {
-          doc.addPage();
-          currentY = 50;
-        }
-
-        const posterUrl = b.poster_file_path
-          ? `${apiBaseUrl}/uploads/${b.poster_file_path.replace(/\\/g, "/")}`
-          : null;
-        const reportUrl = Number(b.has_event_report || 0) > 0
-          ? `${apiBaseUrl}/api/bookings/${b.id}/report`
-          : null;
-
-        doc
-          .font("Helvetica-Bold")
-          .fontSize(10)
-          .fillColor("#111827")
-          .text(`${index + 1}. ${b.title} (${b.event_date})`, TABLE_LEFT, currentY);
-        currentY += 14;
-
-        if (posterUrl) {
-          doc
-            .font("Helvetica")
-            .fontSize(9)
-            .fillColor("#1d4ed8")
-            .text(`Poster: ${posterUrl}`, TABLE_LEFT + 10, currentY, {
-              link: posterUrl,
-              underline: true,
-            });
-          currentY += 14;
-        }
-
-        if (reportUrl) {
-          doc
-            .font("Helvetica")
-            .fontSize(9)
-            .fillColor("#1d4ed8")
-            .text(`Post-event report: ${reportUrl}`, TABLE_LEFT + 10, currentY, {
-              link: reportUrl,
-              underline: true,
-            });
-          currentY += 14;
-        }
-
-        currentY += 6;
-      });
-    }
-
     doc.end();
   } catch (err) {
-    console.error("PDF generation error:", err);
+    logError("PDF generation error", err);
     res.status(500).json({ message: "Failed to generate PDF." });
   }
 };
-
 // ─── Generate CSV/Excel report ────────────────────────────────────────────────
 const generateExcel = async (req, res) => {
   const isAdmin = ["admin", "supervisor"].includes(req.user.role);
@@ -252,7 +234,7 @@ const generateExcel = async (req, res) => {
     const sheet = workbook.addWorksheet("Bookings");
 
     sheet.columns = [
-      { header: "ID", key: "id", width: 8 },
+      { header: "Sl no", key: "sl_no", width: 8 },
       { header: "College", key: "college_name", width: 20 },
       { header: "Title", key: "title", width: 30 },
       { header: "Purpose", key: "purpose", width: 30 },
@@ -260,40 +242,46 @@ const generateExcel = async (req, res) => {
       { header: "Start Time", key: "start_time", width: 12 },
       { header: "End Time", key: "end_time", width: 12 },
       { header: "Status", key: "status", width: 12 },
-      { header: "Admin Note", key: "admin_note", width: 30 },
-      { header: "Poster Link", key: "poster_url", width: 50 },
-      { header: "Post-Event Report Link", key: "event_report_url", width: 50 },
-      { header: "Submitted At", key: "created_at", width: 20 },
+      { header: "Poster Link", key: "poster_url", width: 20 },
+      { header: "Post-Event Report Link", key: "event_report_url", width: 25 },
     ];
 
     // Style header row
-    sheet.getRow(1).font = { bold: true };
+    sheet.getRow(1).font = { bold: true, color: { argb: "FFFFFFFF" } };
     sheet.getRow(1).fill = {
       type: "pattern",
       pattern: "solid",
       fgColor: { argb: "FF1E3A5F" },
     };
-    sheet.getRow(1).font = { bold: true, color: { argb: "FFFFFFFF" } };
 
-    bookings.forEach((b) => {
+    bookings.forEach((b, idx) => {
       const row = sheet.addRow({
-        ...b,
-        poster_url: b.poster_file_path ? `${apiBaseUrl}/uploads/${b.poster_file_path.replace(/\\/g, '/')}` : '',
-        event_report_url: Number(b.has_event_report || 0) > 0 ? `${apiBaseUrl}/api/bookings/${b.id}/report` : '',
+        sl_no: idx + 1,
+        college_name: b.college_name,
+        title: b.title,
+        purpose: b.purpose || "—",
+        event_date: b.event_date,
+        start_time: b.start_time,
+        end_time: b.end_time,
+        status: b.status.toUpperCase(),
       });
 
       if (b.poster_file_path) {
         row.getCell('poster_url').value = {
-          text: 'View poster',
+          text: 'View Poster',
           hyperlink: `${apiBaseUrl}/uploads/${b.poster_file_path.replace(/\\/g, '/')}`,
         };
+      } else {
+        row.getCell('poster_url').value = "—";
       }
 
       if (Number(b.has_event_report || 0) > 0) {
         row.getCell('event_report_url').value = {
-          text: 'View report',
+          text: 'View Report',
           hyperlink: `${apiBaseUrl}/api/bookings/${b.id}/report`,
         };
+      } else {
+        row.getCell('event_report_url').value = "—";
       }
     });
 
@@ -308,7 +296,7 @@ const generateExcel = async (req, res) => {
     await workbook.xlsx.write(res);
     res.end();
   } catch (err) {
-    console.error("Excel generation error:", err);
+    logError("Excel generation error", err);
     res.status(500).json({ message: "Failed to generate Excel report." });
   }
 };
@@ -332,6 +320,7 @@ const getAnalytics = async (req, res) => {
 
     res.json({ totalByCollege, monthlyTrend });
   } catch (err) {
+    logError("Analytics error", err);
     res.status(500).json({ message: "Server error." });
   }
 };
@@ -352,7 +341,7 @@ const downloadActionLogs = async (req, res) => {
     res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
     return res.sendFile(actionLogPath);
   } catch (err) {
-    console.error("Action log download error:", err);
+    logError("Action log download error", err);
     return res.status(500).json({ message: "Failed to download action logs." });
   }
 };

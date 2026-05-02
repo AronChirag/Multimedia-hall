@@ -1,33 +1,6 @@
-const admin = require('firebase-admin');
 const db = require('../config/db');
-
-let firebaseApp = null;
+const { getMessaging, isPushConfigured } = require('./firebaseUtils');
 let pushConfigWarningShown = false;
-
-const normalizePrivateKey = (value) =>
-  value ? String(value).replace(/\\n/g, '\n') : '';
-
-const firebaseCredentials = () => ({
-  projectId: process.env.FIREBASE_PROJECT_ID,
-  clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-  privateKey: normalizePrivateKey(process.env.FIREBASE_PRIVATE_KEY),
-});
-
-const isPushConfigured = () => {
-  const creds = firebaseCredentials();
-  return Boolean(creds.projectId && creds.clientEmail && creds.privateKey);
-};
-
-const getFirebaseApp = () => {
-  if (!isPushConfigured()) return null;
-  if (firebaseApp) return firebaseApp;
-
-  const creds = firebaseCredentials();
-  firebaseApp = admin.initializeApp({
-    credential: admin.credential.cert(creds),
-  });
-  return firebaseApp;
-};
 
 const ensurePushTokenTable = async () => {
   await db.query(`
@@ -99,13 +72,17 @@ const sendPushToUser = async (userId, payload) => {
     return { sent: 0, reason: 'push_not_configured' };
   }
 
-  const app = getFirebaseApp();
+  const messaging = getMessaging();
   const tokens = await getUserPushTokens(userId);
+  if (!messaging) {
+    return { sent: 0, reason: 'push_not_configured' };
+  }
+
   if (tokens.length === 0) {
     return { sent: 0, reason: 'no_registered_tokens' };
   }
 
-  const result = await admin.messaging(app).sendEachForMulticast({
+  const result = await messaging.sendEachForMulticast({
     tokens,
     notification: {
       title: payload.title,
@@ -144,6 +121,42 @@ const sendPushToUser = async (userId, payload) => {
     sent: result.successCount,
     failed: result.failureCount,
   };
+};
+
+const sendPushToUsers = async (userIds, payload) => {
+  const uniqueUserIds = [...new Set(userIds.map(Number).filter(Boolean))];
+  const results = await Promise.allSettled(
+    uniqueUserIds.map((userId) => sendPushToUser(userId, payload))
+  );
+
+  return results.reduce(
+    (summary, result) => {
+      if (result.status === 'fulfilled') {
+        summary.sent += result.value?.sent || 0;
+        summary.failed += result.value?.failed || 0;
+        if (result.value?.reason) summary.reasons.push(result.value.reason);
+      } else {
+        summary.failed += 1;
+        summary.reasons.push(result.reason?.message || String(result.reason));
+      }
+      return summary;
+    },
+    { sent: 0, failed: 0, reasons: [] }
+  );
+};
+
+const sendNewBookingRequestPush = async (adminUserIds, booking) => {
+  return sendPushToUsers(adminUserIds, {
+    title: 'New booking request',
+    body: `${booking.college_name} requested "${booking.title}" for ${new Date(
+      booking.event_date
+    ).toDateString()}.`,
+    link: '/admin/requests',
+    data: {
+      type: 'new_booking_request',
+      bookingId: booking.id,
+    },
+  });
 };
 
 const sendBookingStatusPush = async (userId, booking, status) => {
@@ -187,6 +200,7 @@ module.exports = {
   ensurePushTokenTable,
   saveUserPushToken,
   removeUserPushToken,
+  sendNewBookingRequestPush,
   sendBookingStatusPush,
   sendPostReportReminderPush,
   sendPasswordResetPush,
