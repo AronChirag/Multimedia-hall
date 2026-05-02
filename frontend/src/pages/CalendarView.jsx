@@ -42,14 +42,27 @@ const toDateParam = (value) => {
   return String(value).split('T')[0];
 };
 
+const getIsMobileViewport = () =>
+  typeof window !== 'undefined' ? window.innerWidth <= 768 : false;
+
 const CalendarView = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
 
   const [events, setEvents] = useState([]);
   const [selectedEvent, setSelectedEvent] = useState(null);
+  const [isMobile, setIsMobile] = useState(getIsMobileViewport);
 
   const todayDate = formatDateKey(new Date());
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(getIsMobileViewport());
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   // fetchBookings will be automatically triggered by FullCalendar's datesSet callback on mount
 
@@ -157,12 +170,16 @@ const CalendarView = () => {
               right: 'dayGridMonth,timeGridWeek,timeGridDay',
             }}
             events={events}
+            dayMaxEvents={true}
+            moreLinkClick="popover"
             eventClick={handleEventClick}
             dateClick={handleDateClick}
             dayCellClassNames={getDayCellClassNames}
 
             eventContent={(eventInfo) => {
               const { title, start, extendedProps } = eventInfo.event;
+              const isCompactMonthCard =
+                isMobile && eventInfo.view.type === 'dayGridMonth';
 
               const startTime = start?.toLocaleTimeString([], {
                 hour: '2-digit',
@@ -182,21 +199,15 @@ const CalendarView = () => {
 
               return (
                 <div
-                  style={{
-                    backgroundColor: eventInfo.event.backgroundColor,
-                    color: '#fff',
-                    borderRadius: '6px',
-                    padding: '6px 8px',
-                    fontSize: '11px',
-                    overflow: 'hidden',
-                    whiteSpace: 'nowrap',
-                    textOverflow: 'ellipsis',
-                  }}
+                  className={`calendar-event-card${isCompactMonthCard ? ' compact' : ''}`}
+                  style={{ backgroundColor: eventInfo.event.backgroundColor }}
                 >
-                  <div style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{title}</div>
-                  <div style={{ fontSize: '10px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                    {startTime} – {endTime}
-                  </div>
+                  <div className="calendar-event-title">{title}</div>
+                  {!isCompactMonthCard && (
+                    <div className="calendar-event-time">
+                      {startTime} – {endTime}
+                    </div>
+                  )}
                 </div>
               );
             }}

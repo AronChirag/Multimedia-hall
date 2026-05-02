@@ -3,6 +3,7 @@
   margin: 0 auto;
   padding: clamp(16px, 3vw, 30px) clamp(12px, 3vw, 24px);
   width: 100%;
+  min-width: 0;
 }
 
 /* ─── Header ───────────────────────────────── */
@@ -168,6 +169,7 @@
   border-radius: 8px;
   padding: 20px;
   min-width: 0;
+  overflow: hidden;
 }
 
 .table-card {
@@ -315,6 +317,10 @@
     padding: 14px;
   }
 
+  .bookings-table {
+    min-width: 640px;
+  }
+
   .bookings-table th,
   .bookings-table td {
     padding: 10px;
@@ -343,5 +349,9 @@
   .filter-form .btn {
     flex-basis: 100%;
     width: 100%;
+  }
+
+  .bookings-table {
+    min-width: 560px;
   }
 }
