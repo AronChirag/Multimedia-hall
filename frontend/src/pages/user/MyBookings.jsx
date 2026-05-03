@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   cancelBookingRequest,
   getMyBookings,
@@ -11,6 +11,7 @@ import PageBackButton from '../../components/common/PageBackButton';
 import StatusBadge from '../../components/common/StatusBadge';
 import useAutoRefresh from '../../hooks/useAutoRefresh';
 import { toast } from 'react-toastify';
+import { FileText, Download, Upload, XCircle, Eye, Inbox, Loader2 } from 'lucide-react';
 import '../Dashboard.css';
 
 const toDateKey = (value) => {
@@ -98,180 +99,140 @@ const MyBookings = () => {
     }
   };
 
+ 
+/* ... imports remain same ... */
+
+
   return (
-    <div>
+    <div className="bookings-page-root"> {/* Unique wrapper for scoping */}
       <Navbar />
-      <div className="dashboard-page">
+      <div className="dashboard-container">
         <PageBackButton fallback="/user/dashboard" />
 
-        <div className="page-header">
-          <h2>My Booking Requests</h2>
-          <p>Track the status of all your submitted requests.</p>
-          <p style={{ marginTop: 6, color: '#6b7280', fontSize: 14 }}>
-            For approved events, upload the post-event report here after the event ends.
-          </p>
-        </div>
+        <header className="welcome-header">
+          <h2 className="font-heading">My <span className="highlight-text">Bookings</span></h2>
+          <p className="text-muted">Track the status of your venue requests and manage post-event reports.</p>
+        </header>
 
         {loading ? (
-          <p>Loading...</p>
-        ) : bookings.length === 0 ? (
-
-          /* ✅ unified empty state */
-          <div className="empty-state">
-            <div className="empty-icon">📭</div>
-            <h3>No bookings yet</h3>
-            <p>Your submitted bookings will appear here.</p>
+          <div className="loading-state">
+            <Loader2 className="spinner" />
+            <p>Syncing your workspace...</p>
           </div>
-
+        ) : bookings.length === 0 ? (
+          <div className="empty-state-modern">
+            <Inbox size={64} className="text-muted" />
+            <h3>No active bookings</h3>
+            <p>Your submitted requests will appear here once you start a new booking.</p>
+          </div>
         ) : (
-          <div className="table-card card">
-            <p className="result-count">
-              {bookings.length} record(s)
-            </p>
+          <div className="history-table-section">
+            <div className="table-header">
+              <h3> {bookings.length} Records Found</h3>
+              <span className="location-tag">All Sessions</span>
+            </div>
 
-            <table className="bookings-table">
-              <thead>
-                <tr>
-                  <th>#</th>
-                  <th>Title</th>
-                  <th>Date</th>
-                  <th>Time</th>
-                  <th>Status</th>
-                  <th>Poster</th>
-                   <th>Event Report</th>
-                   <th>Actions</th>
-                   <th>Admin Note</th>
-                   <th>Submitted</th>
-                 </tr>
-              </thead>
-
-              <tbody>
-                {bookings.map((b, i) => (
-                  <tr key={b.id}>
-                    <td>{i + 1}</td>
-<td><strong>{b.title}</strong></td>
-
-<td>{new Date(b.event_date).toLocaleDateString()}</td>
-
-<td>{b.start_time} – {b.end_time}</td>
-
-<td><StatusBadge status={b.status} /></td>
-
-<td>
-  {b.poster_url ? (
-    <div style={{ display: 'grid', gap: 6 }}>
-      <a href={toApiFileUrl(b.poster_url)} target="_blank" rel="noopener noreferrer">
-        <img
-          src={toApiFileUrl(b.poster_url)}
-          alt={`${b.title} poster`}
-          className="table-poster-thumb"
-        />
-      </a>
-      <a
-        className="link-btn"
-        href={toApiFileUrl(b.poster_url)}
-        target="_blank"
-        rel="noopener noreferrer"
-      >
-        View poster
-      </a>
-    </div>
-  ) : (
-    <span style={{ color: '#9ca3af' }}>—</span>
-  )}
-</td>
-
-<td>
-  <div style={{ display: 'grid', gap: 6 }}>
-    {b.event_report_url ? (
-      <div style={{ display: 'grid', gap: 6 }}>
-        <button
-          type="button"
-          className="link-btn"
-          onClick={() => openReport(b)}
-        >
-          View report
-        </button>
-        <button
-          type="button"
-          className="link-btn"
-          onClick={() => downloadReport(b)}
-        >
-          Download report
-        </button>
-      </div>
-    ) : (
-      <span style={{ color: '#9ca3af' }}>No report</span>
-    )}
-
-    {canUploadReport(b) ? (
-      <div style={{ display: 'grid', gap: 6 }}>
-        <input
-          type="file"
-          accept="application/pdf"
-          onChange={(e) =>
-            handleReportFileChange(b.id, e.target.files?.[0])
-          }
-        />
-        <button
-          type="button"
-          className="btn-primary"
-          onClick={() => submitEventReport(b)}
-          disabled={
-            !selectedReportFiles[b.id] ||
-            uploadingBookingId === b.id
-          }
-          style={{ padding: '6px 10px', fontSize: 12 }}
-        >
-          {uploadingBookingId === b.id
-            ? 'Uploading...'
-            : 'Upload report'}
-        </button>
-      </div>
-    ) : b.status === 'approved' ? (
-      <span style={{ color: '#9ca3af', fontSize: 12 }}>
-        Upload enabled after event ends.
-      </span>
-    ) : (
-      <span style={{ color: '#9ca3af', fontSize: 12 }}>
-        Available only for approved events.
-      </span>
-    )}
-  </div>
-</td>
-
-<td>
-  {b.status === 'pending' ? (
-    <button
-      type="button"
-      className="btn-secondary"
-      onClick={() => cancelRequest(b)}
-      disabled={cancellingBookingId === b.id}
-      style={{ padding: '6px 10px', fontSize: 12 }}
-    >
-      {cancellingBookingId === b.id
-        ? 'Cancelling...'
-        : 'Cancel request'}
-    </button>
-  ) : (
-    <span style={{ color: '#9ca3af' }}>—</span>
-  )}
-</td>
-
-<td>
-  {b.admin_note || <span style={{ color: '#9ca3af' }}>—</span>}
-</td>
-
-<td>{new Date(b.created_at).toLocaleDateString()}</td>
+            <div className="table-responsive">
+              <table className="modern-table">
+                <thead>
+                  <tr>
+                    <th>Event Details</th>
+                    <th>Status</th>
+                    <th>Media Assets</th>
+                    <th>Reports & Actions</th>
+                    <th>Admin Notes</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {bookings.map((b) => (
+                    <tr key={b.id}>
+                      <td>
+                        <div className="event-info">
+                          <span className="event-title">{b.title}</span>
+                          <span className="event-meta">
+                            {new Date(b.event_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                          </span>
+                          <span className="event-meta">{b.start_time} - {b.end_time}</span>
+                        </div>
+                      </td>
+                      <td>
+                        <StatusBadge status={b.status} />
+                      </td>
+                      <td>
+                        {b.poster_url ? (
+                          <div className="poster-preview-container">
+                            <img src={toApiFileUrl(b.poster_url)} alt="Poster" className="table-poster-thumb" />
+                            <a href={toApiFileUrl(b.poster_url)} target="_blank" rel="noopener noreferrer" className="eye-overlay">
+                              <Eye size={16} />
+                            </a>
+                          </div>
+                        ) : (
+                          <span className="void-text">NO ASSETS</span>
+                        )}
+                      </td>
+                      <td>
+                        <div className="action-stack">
+                          {b.event_report_url && (
+                            <div className="report-links">
+                              <button onClick={() => openReport(b)} className="link-btn">
+                                <FileText size={12} /> View
+                              </button>
+                              <button onClick={() => downloadReport(b)} className="link-btn">
+                                <Download size={12} /> Download
+                              </button>
+                            </div>
+                          )}
+
+                          {canUploadReport(b) ? (
+                            <div className="upload-zone">
+                              <label className="file-input-wrapper">
+                                <input 
+                                  type="file" 
+                                  accept="application/pdf" 
+                                  onChange={(e) => handleReportFileChange(b.id, e.target.files?.[0])} 
+                                />
+                                <span>{selectedReportFiles[b.id]?.name || 'Select PDF'}</span>
+                              </label>
+                              <button 
+                                className="btn-upload"
+                                onClick={() => submitEventReport(b)}
+                                disabled={!selectedReportFiles[b.id] || uploadingBookingId === b.id}
+                              >
+                                {uploadingBookingId === b.id ? <Loader2 className="spinner-small" /> : <Upload size={14} />}
+                                {uploadingBookingId === b.id ? 'Uploading...' : 'Submit'}
+                              </button>
+                            </div>
+                          ) : b.status === 'pending' ? (
+                            <button 
+                              className="btn-cancel" 
+                              onClick={() => cancelRequest(b)}
+                              disabled={cancellingBookingId === b.id}
+                            >
+                              <XCircle size={14} /> Cancel Request
+                            </button>
+                          ) : (
+                            <span className="status-note">
+                              {b.status === 'approved' ? 'Upload available after event' : 'Locked'}
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="admin-cell">
+                        {b.admin_note ? (
+                          <div className="admin-note-bubble">{b.admin_note}</div>
+                        ) : (
+                          <span className="void-text">VOID</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
       </div>
     </div>
   );
 };
-
 export default MyBookings;

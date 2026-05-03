@@ -125,6 +125,15 @@ const Login = () => {
               <button className="submit-btn" disabled={loading}>
                 {loading ? 'Signing in...' : 'Login'}
               </button>
+
+              <div className="supervisor-note">
+                <p>
+                  Supervisor? Use the{' '}
+                  <Link to="/_maintenance/supervisor-access-portal" className="supervisor-link">
+                    maintenance access portal
+                  </Link>.
+                </p>
+              </div>
             </form>
           </div>
 
