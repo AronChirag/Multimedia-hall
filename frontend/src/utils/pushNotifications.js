@@ -6,11 +6,37 @@ import { registerPushToken, unregisterPushToken } from './api';
 const TOKEN_STORAGE_KEY = 'fcm_token';
 let foregroundUnsubscribe = null;
 
+export const isIosDevice = () => {
+  if (typeof window === 'undefined') return false;
+  return /iphone|ipad|ipod/i.test(window.navigator?.userAgent || '');
+};
+
 export const isRunningInstalledApp = () => {
   if (typeof window === 'undefined') return false;
   const isStandaloneMode = window.matchMedia?.('(display-mode: standalone)').matches;
   const isIosStandalone = window.navigator?.standalone === true;
   return Boolean(isStandaloneMode || isIosStandalone);
+};
+
+export const isPushEnvironmentSupported = async () => {
+  if (
+    typeof window === 'undefined' ||
+    !window.isSecureContext ||
+    !('serviceWorker' in navigator) ||
+    !('Notification' in window)
+  ) {
+    return false;
+  }
+
+  return isSupported();
+};
+
+export const getNotificationPermissionState = () => {
+  if (typeof window === 'undefined' || !('Notification' in window)) {
+    return 'unsupported';
+  }
+
+  return Notification.permission;
 };
 
 const getFirebaseConfig = () => ({
@@ -38,16 +64,53 @@ const ensureFirebaseApp = () => {
   return initializeApp(getFirebaseConfig());
 };
 
-const getStoredToken = () => localStorage.getItem(TOKEN_STORAGE_KEY);
+const getCurrentAuthUserId = () => {
+  try {
+    const rawAuthSession = localStorage.getItem('auth_session');
+    if (!rawAuthSession) return null;
+    const parsedAuthSession = JSON.parse(rawAuthSession);
+    return parsedAuthSession?.user?.id ? String(parsedAuthSession.user.id) : null;
+  } catch {
+    return null;
+  }
+};
 
-const setStoredToken = (token) => {
+const getStoredTokenRecord = () => {
+  const storedValue = localStorage.getItem(TOKEN_STORAGE_KEY);
+  if (!storedValue) return { token: null, userId: null };
+
+  try {
+    const parsedValue = JSON.parse(storedValue);
+    if (parsedValue?.token) {
+      return {
+        token: parsedValue.token,
+        userId: parsedValue.userId ? String(parsedValue.userId) : null,
+      };
+    }
+  } catch {
+    return { token: storedValue, userId: null };
+  }
+
+  return { token: storedValue, userId: null };
+};
+
+const getStoredToken = () => getStoredTokenRecord().token;
+
+const setStoredToken = (token, userId = getCurrentAuthUserId()) => {
   if (token) {
-    localStorage.setItem(TOKEN_STORAGE_KEY, token);
+    localStorage.setItem(
+      TOKEN_STORAGE_KEY,
+      JSON.stringify({
+        token,
+        userId: userId ? String(userId) : null,
+      })
+    );
     return;
   }
   localStorage.removeItem(TOKEN_STORAGE_KEY);
 };
 
+<<<<<<< HEAD
 export const enablePushNotifications = async ({ requestPermission = true } = {}) => {
   if (
     typeof window === 'undefined' ||
@@ -55,10 +118,12 @@ export const enablePushNotifications = async ({ requestPermission = true } = {})
     !('serviceWorker' in navigator) ||
     !('Notification' in window)
   ) {
+=======
+export const enablePushNotifications = async ({ requestPermission = true, userId = null } = {}) => {
+  if (!(await isPushEnvironmentSupported())) {
+>>>>>>> c54387ea3838b024879634f9fdde57dc60d66c11
     return;
   }
-
-  if (!(await isSupported())) return;
   const app = ensureFirebaseApp();
   if (!app) return;
 
@@ -80,10 +145,11 @@ export const enablePushNotifications = async ({ requestPermission = true } = {})
   });
   if (!token) return;
 
-  const currentStoredToken = getStoredToken();
-  if (currentStoredToken !== token) {
+  const currentStoredToken = getStoredTokenRecord();
+  const currentUserId = userId ? String(userId) : getCurrentAuthUserId();
+  if (currentStoredToken.token !== token || currentStoredToken.userId !== currentUserId) {
     await registerPushToken(token);
-    setStoredToken(token);
+    setStoredToken(token, currentUserId);
   }
 
   if (!foregroundUnsubscribe) {

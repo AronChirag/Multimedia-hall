@@ -11,7 +11,7 @@ const AuthContext = createContext(null);
 const AUTH_STORAGE_KEY = 'auth_session';
 const LEGACY_USER_STORAGE_KEY = 'user';
 const LEGACY_TOKEN_STORAGE_KEY = 'token';
-const PWA_REMEMBER_TTL_MS = 14 * 24 * 60 * 60 * 1000;
+const PWA_REMEMBER_TTL_MS = 28 * 24 * 60 * 60 * 1000;
 const BROWSER_REMEMBER_TTL_MS = 10 * 60 * 1000;
 
 const normalizeUser = (user) => {
@@ -143,13 +143,24 @@ export const AuthProvider = ({ children }) => {
       window.isSecureContext &&
       'Notification' in window;
 
+<<<<<<< HEAD
     const setupPush = (requestPermission) => {
       enablePushNotifications({ requestPermission }).catch((err) => {
+=======
+    const setupPush = (requestPermission = true) => {
+      enablePushNotifications({ requestPermission, userId: user.id }).catch((err) => {
+>>>>>>> c54387ea3838b024879634f9fdde57dc60d66c11
         console.error('Push notifications setup failed:', err);
       });
     };
 
+<<<<<<< HEAD
     setupPush(canPromptForPush);
+=======
+    if (typeof window !== 'undefined') {
+      setupPush(true);
+    };
+>>>>>>> c54387ea3838b024879634f9fdde57dc60d66c11
 
     const onAppInstalled = () => {
       setupPush(true);
@@ -210,6 +221,11 @@ export const AuthProvider = ({ children }) => {
     setRememberMe(shouldRememberMe);
     persistAuth({ token: newToken, user: userData, rememberMe: shouldRememberMe });
     setLoading(false);
+
+    enablePushNotifications({ requestPermission: true, userId: userData.id }).catch((err) => {
+      console.error('Push notifications setup failed:', err);
+    });
+
     preloadRoutes(userData.role);
     return userData;
   };

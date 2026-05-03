@@ -9,6 +9,7 @@ const Login = () => {
   const { login } = useAuth();
 
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const [form, setForm] = useState({
     email: '',
     password: '',
@@ -43,6 +44,10 @@ const Login = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handlePasswordTogglePointerDown = (e) => {
+    e.preventDefault();
   };
 
   return (
@@ -96,14 +101,27 @@ const Login = () => {
 
               <div className="form-group">
                 <label>Password</label>
-                <input
-                  className="form-input"
-                  type="password"
-                  name="password"
-                  value={form.password}
-                  onChange={handleChange}
-                  required
-                />
+                <div className="password-input-wrap">
+                  <input
+                    className="form-input password-input"
+                    type={showPassword ? 'text' : 'password'}
+                    name="password"
+                    value={form.password}
+                    onChange={handleChange}
+                    required
+                  />
+                  <button
+                    type="button"
+                    className="password-toggle"
+                    onMouseDown={handlePasswordTogglePointerDown}
+                    onPointerDown={handlePasswordTogglePointerDown}
+                    onClick={() => setShowPassword((value) => !value)}
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                    aria-pressed={showPassword}
+                  >
+                    {showPassword ? 'Hide' : 'Show'}
+                  </button>
+                </div>
               </div>
 
               <label className="remember-me-row">
@@ -135,15 +153,6 @@ const Login = () => {
                 </p>
               </div>
             </form>
-          </div>
-
-          <div className="card-footer">
-            <p>
-              Need help?{' '}
-              <a href="#" className="contact-link">
-                Contact admin
-              </a>
-            </p>
           </div>
         </div>
       </div>

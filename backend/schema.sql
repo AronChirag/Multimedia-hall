@@ -75,17 +75,8 @@ CREATE TABLE IF NOT EXISTS report_reminder_logs (
   FOREIGN KEY (booking_id) REFERENCES bookings(id) ON DELETE CASCADE
 );
 
--- Seed: Admin user (password: admin123)
-INSERT IGNORE INTO users (name, email, password, role) VALUES
-('System Admin', 'admin@auditorium.com', '$2a$10$YourHashedPasswordHere', 'admin');
-
--- Seed: College users (password: college123 for all)
-INSERT IGNORE INTO users (name, email, password, role, college_name) VALUES
-('Dr H N National College of Engineering', 'college_a@edu.com', '$2a$10$YourHashedPasswordHere', 'college', 'Dr H N National College of Engineering'),
-('National College Jayanagar', 'college_b@edu.com', '$2a$10$YourHashedPasswordHere', 'college', 'National College Jayanagar'),
-('National PU College', 'college_c@edu.com', '$2a$10$YourHashedPasswordHere', 'college', 'National PU College');
-
--- Note: Run the seed script (npm run seed) to insert users with properly hashed passwords
+-- Seeded users are managed in backend/seed.js.
+-- Update email addresses there, then run `npm run seed` to insert or update the admin/college accounts.
 
 -- For existing databases, run this migration once:
 -- ALTER TABLE bookings ADD COLUMN event_report_data LONGBLOB NULL AFTER end_time;

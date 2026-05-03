@@ -123,6 +123,42 @@ const sendPushToUser = async (userId, payload) => {
   };
 };
 
+const sendPushToUsers = async (userIds, payload) => {
+  const uniqueUserIds = [...new Set(userIds.map(Number).filter(Boolean))];
+  const results = await Promise.allSettled(
+    uniqueUserIds.map((userId) => sendPushToUser(userId, payload))
+  );
+
+  return results.reduce(
+    (summary, result) => {
+      if (result.status === 'fulfilled') {
+        summary.sent += result.value?.sent || 0;
+        summary.failed += result.value?.failed || 0;
+        if (result.value?.reason) summary.reasons.push(result.value.reason);
+      } else {
+        summary.failed += 1;
+        summary.reasons.push(result.reason?.message || String(result.reason));
+      }
+      return summary;
+    },
+    { sent: 0, failed: 0, reasons: [] }
+  );
+};
+
+const sendNewBookingRequestPush = async (adminUserIds, booking) => {
+  return sendPushToUsers(adminUserIds, {
+    title: 'New booking request',
+    body: `${booking.college_name} requested "${booking.title}" for ${new Date(
+      booking.event_date
+    ).toDateString()}.`,
+    link: '/admin/requests',
+    data: {
+      type: 'new_booking_request',
+      bookingId: booking.id,
+    },
+  });
+};
+
 const sendBookingStatusPush = async (userId, booking, status) => {
   const statusLabel = status === 'approved' ? 'Approved' : 'Rejected';
   return sendPushToUser(userId, {
@@ -164,6 +200,7 @@ module.exports = {
   ensurePushTokenTable,
   saveUserPushToken,
   removeUserPushToken,
+  sendNewBookingRequestPush,
   sendBookingStatusPush,
   sendPostReportReminderPush,
   sendPasswordResetPush,

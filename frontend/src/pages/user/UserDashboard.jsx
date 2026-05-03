@@ -129,30 +129,70 @@ const UserDashboard = () => {
             <h3>Full Request History</h3>
             <Link to="/user/my-bookings" className="view-all">View All</Link>
           </div>
-          <div className="table-responsive">
-            <table className="modern-table">
+        </div>
+
+        {/* Actions */}
+        <div className="dashboard-actions">
+          <Link to="/user/new-booking" className="card card-hover action-card primary">
+            <span className="action-icon">📋</span>
+            <div>
+              <strong>New Booking Request</strong>
+              <p>Submit a request for the auditorium</p>
+            </div>
+          </Link>
+
+          <Link to="/user/calendar" className="card card-hover action-card">
+            <span className="action-icon">📅</span>
+            <div>
+              <strong>View Calendar</strong>
+              <p>See all approved bookings</p>
+            </div>
+          </Link>
+
+          <Link to="/user/reports" className="card card-hover action-card">
+            <span className="action-icon">📊</span>
+            <div>
+              <strong>My Reports</strong>
+              <p>Download your booking history</p>
+            </div>
+          </Link>
+        </div>
+
+        {/* Recent */}
+        <div className="recent-section card">
+          <h3>Recent Requests</h3>
+
+          {loading ? (
+            <p>Loading...</p>
+          ) : recent.length === 0 ? (
+            <p className="empty-msg">
+              No booking requests yet. <Link to="/user/new-booking">Create one →</Link>
+            </p>
+          ) : (
+            <table className="bookings-table">
               <thead>
                 <tr>
                   <th>Title</th>
                   <th>Date</th>
+                  <th>Time</th>
                   <th>Status</th>
                 </tr>
               </thead>
               <tbody>
-                {bookings.map((b) => (
+                {recent.map((b) => (
                   <tr key={b.id}>
-                    <td className="font-bold">{b.title}</td>
-                    <td>{new Date(b.event_date).toLocaleDateString('en-GB')}</td>
+                    <td>{b.title}</td>
+                    <td>{new Date(b.event_date).toLocaleDateString()}</td>
+                    <td>{b.start_time} – {b.end_time}</td>
                     <td><StatusBadge status={b.status} /></td>
                   </tr>
                 ))}
               </tbody>
             </table>
-          </div>
-        </section>
+          )}
+        </div>
 
-        
-      </main>
+      </div>
     </div>
     
   );

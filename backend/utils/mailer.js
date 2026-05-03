@@ -111,6 +111,44 @@ const sendStatusEmail = async (toEmail, userName, booking, status, adminNote) =>
     html,
   });
   console.log(`Email sent to ${recipient}`);
+<<<<<<< HEAD
+=======
+};
+
+const sendAdminBookingRequestEmail = async (toEmail, adminName, booking, requester) => {
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <div style="background: #1e3a5f; padding: 20px; text-align: center;">
+        <h1 style="color: white; margin: 0;">Auditorium Booking System</h1>
+      </div>
+      <div style="padding: 30px; background: #f9fafb; border: 1px solid #e5e7eb;">
+        <p>Dear <strong>${adminName || 'Admin'}</strong>,</p>
+        <p>A new auditorium booking request is waiting for review.</p>
+
+        <div style="background: white; border-radius: 8px; padding: 20px; margin: 20px 0; border-left: 4px solid #1e3a5f;">
+          <table style="width: 100%; border-collapse: collapse;">
+            <tr><td style="padding: 6px 0; color: #6b7280;">Event</td><td><strong>${booking.title}</strong></td></tr>
+            <tr><td style="padding: 6px 0; color: #6b7280;">College</td><td><strong>${booking.college_name}</strong></td></tr>
+            <tr><td style="padding: 6px 0; color: #6b7280;">Requested by</td><td><strong>${requester.name || booking.college_name}</strong> (${requester.email})</td></tr>
+            <tr><td style="padding: 6px 0; color: #6b7280;">Date</td><td><strong>${new Date(booking.event_date).toDateString()}</strong></td></tr>
+            <tr><td style="padding: 6px 0; color: #6b7280;">Time</td><td><strong>${booking.start_time} – ${booking.end_time}</strong></td></tr>
+            ${booking.purpose ? `<tr><td style="padding: 6px 0; color: #6b7280;">Purpose</td><td>${booking.purpose}</td></tr>` : ''}
+          </table>
+        </div>
+
+        <p>Please open the admin requests page to approve or reject this request.</p>
+        <p style="color: #6b7280; font-size: 12px; margin-top: 30px;">This is an automated message. Do not reply.</p>
+      </div>
+    </div>
+  `;
+
+  const recipient = await sendMailToRecipient({
+    toEmail,
+    subject: `New Booking Request: ${booking.title}`,
+    html,
+  });
+  console.log(`Admin booking request email sent to ${recipient} for booking ${booking.id}`);
+>>>>>>> c54387ea3838b024879634f9fdde57dc60d66c11
 };
 
 const sendPostReportReminderEmail = async (toEmail, userName, booking, uploadPageUrl) => {
@@ -185,6 +223,10 @@ module.exports = {
   isValidEmail,
   normalizeEmail,
   sendStatusEmail,
+<<<<<<< HEAD
+=======
+  sendAdminBookingRequestEmail,
+>>>>>>> c54387ea3838b024879634f9fdde57dc60d66c11
   sendPostReportReminderEmail,
   sendPasswordResetEmail,
 };

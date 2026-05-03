@@ -109,10 +109,20 @@ const MyBookings = () => {
       <div className="dashboard-container">
         <PageBackButton fallback="/user/dashboard" />
 
+<<<<<<< HEAD
         <header className="welcome-header">
           <h2 className="font-heading">My <span className="highlight-text">Bookings</span></h2>
           <p className="text-muted">Track the status of your venue requests and manage post-event reports.</p>
         </header>
+=======
+        <div className="page-header">
+          <h2>My Booking Requests</h2>
+          <p>Track the status of all your submitted requests.</p>
+          <p style={{ marginTop: 6, color: '#6b7280', fontSize: 14 }}>
+            For approved events, upload the post-event report here after the event ends.
+          </p>
+        </div>
+>>>>>>> c54387ea3838b024879634f9fdde57dc60d66c11
 
         {loading ? (
           <div className="loading-state">
@@ -235,4 +245,8 @@ const MyBookings = () => {
     </div>
   );
 };
+<<<<<<< HEAD
+=======
+
+>>>>>>> c54387ea3838b024879634f9fdde57dc60d66c11
 export default MyBookings;

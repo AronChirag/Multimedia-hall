@@ -1,8 +1,21 @@
 const db = require('../config/db');
 const fs = require('fs');
 const path = require('path');
+<<<<<<< HEAD
 const { normalizeEmail, isValidEmail, sendStatusEmail } = require('../utils/mailer');
 const { sendBookingStatusPush } = require('../utils/pushNotifications');
+=======
+const {
+  normalizeEmail,
+  isValidEmail,
+  sendStatusEmail,
+  sendAdminBookingRequestEmail,
+} = require('../utils/mailer');
+const {
+  sendBookingStatusPush,
+  sendNewBookingRequestPush,
+} = require('../utils/pushNotifications');
+>>>>>>> c54387ea3838b024879634f9fdde57dc60d66c11
 const { logAudit, logError } = require('../utils/audit');
 
 const uploadsRoot = path.join(__dirname, '..', 'uploads');
@@ -48,6 +61,21 @@ const toDateKey = (dateValue) => {
   return String(dateValue).split('T')[0];
 };
 
+<<<<<<< HEAD
+=======
+const toTimeMinutes = (timeValue) => {
+  const [hours, minutes] = String(timeValue || '')
+    .split(':')
+    .map((part) => Number.parseInt(part, 10));
+
+  if (Number.isNaN(hours) || Number.isNaN(minutes)) {
+    return Number.NaN;
+  }
+
+  return hours * 60 + minutes;
+};
+
+>>>>>>> c54387ea3838b024879634f9fdde57dc60d66c11
 const toApiPosterUrl = (booking) => {
   if (Number(booking.has_poster || 0) > 0 || booking.poster_file_path) {
     return `/api/bookings/${booking.id}/poster`;
@@ -94,12 +122,60 @@ const sendBookingDecisionNotifications = async (booking, status, adminNote) => {
   });
 };
 
+<<<<<<< HEAD
+=======
+const sendNewBookingNotificationsToAdmins = async (booking, requester) => {
+  const [adminRows] = await db.query(
+    `SELECT id, name, email
+     FROM users
+     WHERE role = 'admin'`
+  );
+
+  if (adminRows.length === 0) {
+    console.warn(`No admin users found for booking request notification ${booking.id}.`);
+    return;
+  }
+
+  const notificationTasks = [];
+  adminRows.forEach((adminUser) => {
+    const recipientEmail = normalizeEmail(adminUser.email);
+    if (isValidEmail(recipientEmail)) {
+      notificationTasks.push(
+        sendAdminBookingRequestEmail(recipientEmail, adminUser.name, booking, requester)
+      );
+    } else {
+      console.warn(
+        `Skipping admin booking email for user ${adminUser.id}: invalid email "${adminUser.email || ''}"`
+      );
+    }
+  });
+
+  notificationTasks.push(
+    sendNewBookingRequestPush(
+      adminRows.map((adminUser) => adminUser.id),
+      booking
+    )
+  );
+
+  const results = await Promise.allSettled(notificationTasks);
+  results.forEach((result) => {
+    if (result.status === 'rejected') {
+      console.error('New booking admin notification failed:', result.reason?.message || result.reason);
+    }
+  });
+};
+
+>>>>>>> c54387ea3838b024879634f9fdde57dc60d66c11
 const createBooking = async (req, res) => {
   const { title, purpose, event_date, start_time, end_time } = req.body;
   const { id: user_id, college_name } = req.user;
   const posterFile = req.file || null;
   const normalizedEventDate = String(event_date || '').split('T')[0];
-  const todayKey = toDateKey(new Date());
+  const now = new Date();
+  const todayKey = toDateKey(now);
+  const currentMinutes = now.getHours() * 60 + now.getMinutes();
+  const startMinutes = toTimeMinutes(start_time);
+  const endMinutes = toTimeMinutes(end_time);
 
   if (!title || !event_date || !start_time || !end_time) {
     return res.status(400).json({
@@ -118,6 +194,18 @@ const createBooking = async (req, res) => {
   if (start_time >= end_time) {
     return res.status(400).json({
       message: 'Start time must be before end time.',
+    });
+  }
+
+  if (Number.isNaN(startMinutes) || Number.isNaN(endMinutes)) {
+    return res.status(400).json({
+      message: 'Invalid start or end time.',
+    });
+  }
+
+  if (normalizedEventDate === todayKey && startMinutes <= currentMinutes) {
+    return res.status(400).json({
+      message: 'Bookings for today must use a future start time.',
     });
   }
 
@@ -163,6 +251,23 @@ const createBooking = async (req, res) => {
       ]
     );
 
+    const createdBooking = {
+      id: result.insertId,
+      user_id,
+      college_name,
+      title,
+      purpose,
+      event_date: normalizedEventDate,
+      start_time,
+      end_time,
+    };
+
+    const requester = {
+      id: user_id,
+      name: req.user.name,
+      email: req.user.email,
+    };
+
     await logAudit(
       'BOOKING_CREATED',
       user_id,
@@ -170,6 +275,18 @@ const createBooking = async (req, res) => {
       `${req.user.email || college_name} requested "${title}" for ${normalizedEventDate}`
     );
 
+<<<<<<< HEAD
+=======
+    setImmediate(() => {
+      sendNewBookingNotificationsToAdmins(createdBooking, requester).catch((notificationErr) => {
+        console.error(
+          `New booking admin notifications failed for booking ${result.insertId}:`,
+          notificationErr.message
+        );
+      });
+    });
+
+>>>>>>> c54387ea3838b024879634f9fdde57dc60d66c11
     return res.status(201).json({
       message: 'Booking request submitted successfully.',
       bookingId: result.insertId,

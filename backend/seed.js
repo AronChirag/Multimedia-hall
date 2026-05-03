@@ -19,11 +19,35 @@ const seed = async () => {
     ];
 
     for (const u of users) {
+<<<<<<< HEAD
       await db.query(
         'INSERT INTO users (name, email, password, role, college_name) VALUES (?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE name=VALUES(name), password=VALUES(password), role=VALUES(role), college_name=VALUES(college_name)',
         [u.name, u.email, u.password, u.role, u.college_name]
       );
       console.log(`Seeded: ${u.email}`);
+=======
+      const lookupQuery =
+        u.role === 'admin'
+          ? 'SELECT id FROM users WHERE role = ? LIMIT 1'
+          : 'SELECT id FROM users WHERE role = ? AND college_name = ? LIMIT 1';
+      const lookupParams = u.role === 'admin' ? [u.role] : [u.role, u.college_name];
+      const [existingRows] = await db.query(lookupQuery, lookupParams);
+
+      if (existingRows.length > 0) {
+        await db.query(
+          'UPDATE users SET name = ?, email = ?, password = ?, role = ?, college_name = ? WHERE id = ?',
+          [u.name, u.email, u.password, u.role, u.college_name, existingRows[0].id]
+        );
+        console.log(`Updated seeded user: ${u.email}`);
+        continue;
+      }
+
+      await db.query(
+        'INSERT INTO users (name, email, password, role, college_name) VALUES (?, ?, ?, ?, ?)',
+        [u.name, u.email, u.password, u.role, u.college_name]
+      );
+      console.log(`Inserted seeded user: ${u.email}`);
+>>>>>>> c54387ea3838b024879634f9fdde57dc60d66c11
     }
   } finally {
     await db.end();

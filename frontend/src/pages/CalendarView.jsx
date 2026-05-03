@@ -42,14 +42,31 @@ const toDateParam = (value) => {
   return String(value).split('T')[0];
 };
 
+const getIsMobileViewport = () =>
+  typeof window !== 'undefined' ? window.innerWidth <= 768 : false;
+
 const CalendarView = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
 
   const [events, setEvents] = useState([]);
   const [selectedEvent, setSelectedEvent] = useState(null);
+  const [isMobile, setIsMobile] = useState(getIsMobileViewport);
 
   const todayDate = formatDateKey(new Date());
+
+<<<<<<< HEAD
+  // fetchBookings will be automatically triggered by FullCalendar's datesSet callback on mount
+=======
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(getIsMobileViewport());
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+>>>>>>> c54387ea3838b024879634f9fdde57dc60d66c11
 
   // fetchBookings will be automatically triggered by FullCalendar's datesSet callback on mount
 
@@ -106,6 +123,17 @@ const CalendarView = () => {
     });
   };
 
+  const getDayCellClassNames = (arg) => {
+    if (user?.role !== 'college') return [];
+
+    const cellDate = formatDateKey(arg.date);
+    if (cellDate < todayDate) {
+      return ['calendar-day-disabled'];
+    }
+
+    return [];
+  };
+
   const openEventReport = async (url) => {
     if (!url) return;
     try {
@@ -146,12 +174,19 @@ const CalendarView = () => {
               right: 'dayGridMonth,timeGridWeek,timeGridDay',
             }}
             events={events}
+            dayMaxEvents={true}
+            moreLinkClick="popover"
             eventClick={handleEventClick}
             dateClick={handleDateClick}
-            validRange={user?.role === 'college' ? { start: todayDate } : undefined}
+            dayCellClassNames={getDayCellClassNames}
 
             eventContent={(eventInfo) => {
               const { title, start, extendedProps } = eventInfo.event;
+<<<<<<< HEAD
+=======
+              const isCompactMonthCard =
+                isMobile && eventInfo.view.type === 'dayGridMonth';
+>>>>>>> c54387ea3838b024879634f9fdde57dc60d66c11
 
               const startTime = start?.toLocaleTimeString([], {
                 hour: '2-digit',
@@ -171,6 +206,7 @@ const CalendarView = () => {
 
               return (
                 <div
+<<<<<<< HEAD
                   style={{
                     backgroundColor: eventInfo.event.backgroundColor,
                     color: '#fff',
@@ -186,6 +222,17 @@ const CalendarView = () => {
                   <div style={{ fontSize: '10px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                     {startTime} – {endTime}
                   </div>
+=======
+                  className={`calendar-event-card${isCompactMonthCard ? ' compact' : ''}`}
+                  style={{ backgroundColor: eventInfo.event.backgroundColor }}
+                >
+                  <div className="calendar-event-title">{title}</div>
+                  {!isCompactMonthCard && (
+                    <div className="calendar-event-time">
+                      {startTime} – {endTime}
+                    </div>
+                  )}
+>>>>>>> c54387ea3838b024879634f9fdde57dc60d66c11
                 </div>
               );
             }}
